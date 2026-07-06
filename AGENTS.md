@@ -135,7 +135,7 @@ The `mage helm:all` applies releases in dependency order using separate helmfile
 
 1. **Module name mismatch**: The Go module is `dbz-mage` but the directory is `oneint-k8s-mgt`. Imports use `dbz-mage/ko/...`.
 2. **Two task systems**: Both `magefile.go` and `Taskfile.yaml` exist. The magefile is the primary tool; Taskfile is mostly legacy for Kind-based local development.
-3. **Hardcoded DMP base URL**: `ko/dmp/http_client.go` hardcodes `http://platform.debezium.local`. Override by changing the `BaseURL` field on the client struct.
+3. **DMP base URL resolution**: `ko/dmp/http_client.go` resolves the base URL as `DMP_BASE_URL` → `http://dmp.${DBZ_DOMAIN}` → `http://dmp.platform.debezium.local`. Override per-instance via the `BaseURL` field on the client struct.
 4. **Mage build tag**: The magefile has `//go:build mage` — it won't compile with regular `go build`. Use `mage` to run targets.
 5. **No idempotent apply for pipelines**: The `scenario:mongodbRs` mage target goes through `mongoRsBasic()` which uses `dmp.ResourceResolver` — idempotent. But the `ko/scenarios/service.go` path does NOT do FindByName (marked as TODO), so repeated calls there would create duplicates.
 6. **JSON payloads expect `name` field**: All DMP JSON payloads MUST have a `"name"` key, or the loader will error.

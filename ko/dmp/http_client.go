@@ -4,11 +4,12 @@ import (
 	"bytes"
 	"fmt"
 	"net/http"
+	"os"
 	"time"
 )
 
 const (
-	baseUrl         = "http://platform.debezium.local"
+	defaultDomain   = "platform.debezium.local"
 	connUrl         = "/api/connections"
 	connValidateUrl = "/api/connections/validate"
 	sourceUrl       = "/api/sources"
@@ -28,9 +29,22 @@ func NewHTTPClient() *HTTPClient {
 	}
 
 	return &HTTPClient{
-		BaseURL:    baseUrl,
+		BaseURL:    resolveBaseURL(),
 		HTTPClient: client,
 	}
+}
+
+func resolveBaseURL() string {
+	if url := os.Getenv("DMP_BASE_URL"); url != "" {
+		return url
+	}
+
+	domain := os.Getenv("DBZ_DOMAIN")
+	if domain == "" {
+		domain = defaultDomain
+	}
+
+	return "http://dmp." + domain
 }
 
 func (c *HTTPClient) doRequest(method string, resourceType ResourceType, body []byte) (*http.Response, error) {

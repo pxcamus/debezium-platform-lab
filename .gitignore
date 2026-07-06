@@ -5,6 +5,8 @@
 !.env.example
 *.kubeconfig
 kubeconfig*
+# Per-release secret overlays (real hosts, tokens, htpasswd hashes)
+deploy/values/**/*.secret.yaml
 
 # Symlinked / external working dirs
 examples

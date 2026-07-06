@@ -61,7 +61,8 @@ mage -l
 | Variable | Purpose | Default |
 |---|---|---|
 | `DBZ_VERSION` | Debezium Helm chart version | **required** |
-| `DBZ_ENV` | Deployment environment; selects `deploy/values/<component>/<DBZ_ENV>.yaml` | `local` |
+| `DBZ_ENV` | Deployment environment; selects `deploy/values/<component>/<DBZ_ENV>.yaml.gotmpl` | `local` |
+| `DBZ_DOMAIN` | Base DNS zone; every ingress host is `<component>.${DBZ_DOMAIN}` (e.g. `dmp.`, `apicurio.`, `kafbat.`, `registry.`) | `platform.debezium.local` |
 | `DBZ_NAMESPACE` | Debezium Platform namespace | `dmp` |
 | `CLUSTER_TYPE` | Cluster provider: `kind` or `k3s` | `kind` |
 | `DMP_RESOURCE_PREFIX` / `DMP_ENVIRONMENT` | Prefix for deterministic DMP resource names | — |
@@ -177,6 +178,6 @@ The webhook release is gated on `DBZ_ENV=homelab`, so it is not installed for `l
 - **Module name:** the Go module is `dbz-mage` (unchanged by the repo name). Imports use `dbz-mage/ko/...`.
 - **No `go build` target:** `magefile.go` uses the `//go:build mage` tag and only compiles via `mage`. `main.go` is a separate standalone entry point.
 - **Two task runners:** `magefile.go` is primary and current; `Taskfile.yaml` is a legacy Kind workflow and some of its paths predate the `deploy/` reorg.
-- **DMP base URL:** `ko/dmp/http_client.go` defaults to `http://platform.debezium.local`; override via `DMP_BASE_URL`.
+- **DMP base URL:** `ko/dmp/http_client.go` derives `http://dmp.${DBZ_DOMAIN}` (or `DMP_BASE_URL` if set); ingress hosts across the platform are `<component>.${DBZ_DOMAIN}`, set via the `DBZ_DOMAIN` base zone.
 - **Idempotent DMP resources:** the resolver does find-by-name before create, so re-running a scenario reuses existing resources.
 - **Commented-out releases:** `helmfile.yaml.gotmpl` and `magefile.go` contain disabled blocks for optional/retired components (Apicurio, CDC dashboard, Kafka Connect). Don't enable without checking the dependency chain.

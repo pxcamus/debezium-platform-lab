@@ -2,19 +2,9 @@ name: Go
 
 on:
   pull_request:
-    paths:
-      - "**/*.go"
-      - "go.mod"
-      - "go.sum"
-      - ".github/workflows/go.yaml"
   push:
     branches:
       - main
-    paths:
-      - "**/*.go"
-      - "go.mod"
-      - "go.sum"
-      - ".github/workflows/go.yaml"
 
 jobs:
   go:
@@ -25,18 +15,35 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Detect whether any Go-relevant files changed. The job itself always runs
+      # (so it can report status on every PR and satisfy required-check rules),
+      # but the expensive steps below are gated on this filter.
+      - name: Detect Go changes
+        id: changes
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            go:
+              - '**/*.go'
+              - 'go.mod'
+              - 'go.sum'
+              - '.github/workflows/go.yaml'
+
       - name: Set up Go
+        if: steps.changes.outputs.go == 'true'
         uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
           cache: true
 
       - name: Verify go.mod is tidy
+        if: steps.changes.outputs.go == 'true'
         run: |
           go mod tidy
           git diff --exit-code -- go.mod go.sum
 
       - name: Check formatting
+        if: steps.changes.outputs.go == 'true'
         run: |
           unformatted="$(gofmt -l .)"
           if [[ -n "${unformatted}" ]]; then
@@ -47,13 +54,20 @@ jobs:
           fi
 
       - name: Vet
+        if: steps.changes.outputs.go == 'true'
         run: go vet ./...
 
       - name: Build
+        if: steps.changes.outputs.go == 'true'
         run: go build ./...
 
       # magefile.go carries the //go:build mage tag, so it is excluded from the
       # plain build/vet above. 'mage -l' compiles it in isolation, which is the
       # only way to catch magefile compile errors in CI.
       - name: Compile magefile
+        if: steps.changes.outputs.go == 'true'
         run: go run github.com/magefile/mage -l
+
+      - name: No Go changes
+        if: steps.changes.outputs.go != 'true'
+        run: echo "No Go-relevant files changed; skipping build."

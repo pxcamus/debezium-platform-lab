@@ -21,6 +21,7 @@ load_env_file ".env"
 
 : "${DBZ_VERSION:?DBZ_VERSION must be set in deploy/environment/versions.env, .env, or the environment}"
 : "${DBZ_ENV:=local}"
+: "${DBZ_DOMAIN:=platform.debezium.local}"
 : "${DBZ_NAMESPACE:=dmp}"
 : "${DBZ_IMAGE_TAG:=nightly}"
 : "${DBZ_IMAGE_TAG_CONDUCTOR:=nightly}"
@@ -67,6 +68,7 @@ chart_values_args() {
 echo "==> Helmfile lint"
 DBZ_VERSION="${DBZ_VERSION}" \
 DBZ_ENV="${DBZ_ENV}" \
+DBZ_DOMAIN="${DBZ_DOMAIN}" \
 DBZ_NAMESPACE="${DBZ_NAMESPACE}" \
 DBZ_IMAGE_TAG="${DBZ_IMAGE_TAG}" \
 DBZ_IMAGE_TAG_CONDUCTOR="${DBZ_IMAGE_TAG_CONDUCTOR}" \
@@ -80,8 +82,8 @@ helmfile_envs=(
 helmfile_env_required_files() {
   local env="$1"
 
-  printf '%s\n' "deploy/values/dmp/${env}.yaml"
-  printf '%s\n' "deploy/values/apicurio/${env}.yaml"
+  printf '%s\n' "deploy/values/dmp/${env}.yaml.gotmpl"
+  printf '%s\n' "deploy/values/apicurio/${env}.yaml.gotmpl"
 }
 
 helmfile_env_is_complete() {
@@ -105,6 +107,7 @@ template_helmfile_env() {
 
   DBZ_VERSION="${DBZ_VERSION}" \
   DBZ_ENV="${env}" \
+  DBZ_DOMAIN="${DBZ_DOMAIN}" \
   DBZ_NAMESPACE="${DBZ_NAMESPACE}" \
   DBZ_IMAGE_TAG="${DBZ_IMAGE_TAG}" \
   DBZ_IMAGE_TAG_CONDUCTOR="${DBZ_IMAGE_TAG_CONDUCTOR}" \
