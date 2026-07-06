@@ -18,6 +18,6 @@ service:
 ingress:
   enabled: true
   ingressClassName: nginx
-  host: kafbat.platform.debezium.local
+  host: kafbat.{{ requiredEnv "DBZ_DOMAIN" }}
   path: /
   pathType: Prefix

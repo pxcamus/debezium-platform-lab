@@ -24,10 +24,10 @@ ui:
     type: ClusterIP
     port: 8080
   env:
-    REGISTRY_API_URL: "http://apicurio.platform.debezium.local/apis/registry/v3"
+    REGISTRY_API_URL: "http://apicurio.{{ requiredEnv "DBZ_DOMAIN" }}/apis/registry/v3"
 
 ingress:
   enabled: true
-  className: nginx
-  host: apicurio.platform.debezium.local
+  className: traefik
+  host: apicurio.{{ requiredEnv "DBZ_DOMAIN" }}
   annotations: {}

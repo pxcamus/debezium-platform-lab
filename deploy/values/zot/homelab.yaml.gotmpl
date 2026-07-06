@@ -4,13 +4,13 @@
 # DBZ_ENV=homelab. Applied via:
 #   helmfile --file deploy/helmfile.yaml.gotmpl --selector app=zot apply
 # (or as part of --selector infra=true). Standalone equivalent:
-#   helm upgrade --install zot project-zot/zot -n registry \
-#     -f deploy/values/zot/homelab.yaml -f deploy/values/zot/homelab.secret.yaml
+#   DBZ_DOMAIN=<your-zone> helmfile ... --selector app=zot apply
 #
-# Public repo: the real domain and htpasswd hash are placeholders here. Supply the
-# real values from deploy/values/zot/homelab.secret.yaml — a git-ignored overlay
-# (matched by deploy/values/**/*.secret.yaml) layered on top of this file. Create it
-# with a real host, cert secret name, arm64 image override, and:
+# The ingress host and TLS secret are derived from DBZ_DOMAIN (registry.<zone>,
+# wildcard-<zone-with-dashes>-tls). The htpasswd hash is still a placeholder here —
+# supply it (and any arm64 image override) from deploy/values/zot/homelab.secret.yaml,
+# a git-ignored overlay (matched by deploy/values/**/*.secret.yaml) layered on top of
+# this file. Generate the hash with:
 #   htpasswd -bBn admin 'your-strong-password'   # -> the $2y$ line for secretFiles.htpasswd
 image:
   # Extended build (includes the search/ui extensions) — arch-specific.
@@ -75,10 +75,10 @@ ingress:
   className: traefik
   pathtype: Prefix
   hosts:
-    - host: registry.example.com          # override with your real host in a local overlay
+    - host: registry.{{ requiredEnv "DBZ_DOMAIN" }}
       paths:
         - path: /
   tls:
-    - secretName: wildcard-example-com-tls # override with your real cert secret in a local overlay
+    - secretName: wildcard-{{ requiredEnv "DBZ_DOMAIN" | replace "." "-" }}-tls
       hosts:
-        - registry.example.com
+        - registry.{{ requiredEnv "DBZ_DOMAIN" }}

@@ -13,7 +13,7 @@ stage:
 ingress:
   className: traefik
 domain:
-  name: platform.debezium.io
+  name: dmp.{{ requiredEnv "DBZ_DOMAIN" }}
 database:
   enabled: true
 debezium-operator:

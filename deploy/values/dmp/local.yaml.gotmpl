@@ -1,9 +1,9 @@
 domain:
-  name: platform.debezium.example
+  name: dmp.{{ requiredEnv "DBZ_DOMAIN" }}
 database:
   enabled: true
 ingress:
-  className: traefik
+  className: nginx
 debezium-operator:
   enabled: false
 conductor:
