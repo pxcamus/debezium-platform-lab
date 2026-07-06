@@ -1,0 +1,6 @@
+auth:
+  saPassword: "StrongPassw0rd!"
+
+# k3s ships local-path, not the chart default "standard"
+persistence:
+  storageClass: local-path
