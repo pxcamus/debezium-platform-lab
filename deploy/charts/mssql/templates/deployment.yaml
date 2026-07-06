@@ -1,0 +1,73 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: mssql
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: mssql
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: mssql
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      securityContext:
+        fsGroup: 10001
+        fsGroupChangePolicy: OnRootMismatch
+      containers:
+        - name: mssql
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: mssql
+              containerPort: 1433
+              protocol: TCP
+          env:
+            - name: ACCEPT_EULA
+              value: {{ .Values.mssql.acceptEula | quote }}
+            - name: MSSQL_SA_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-sa-password
+                  key: password
+            - name: NAME
+              value: {{ .Values.name | quote }}
+            - name: MSSQL_AGENT_ENABLED
+              value: {{ .Values.mssql.agentEnabled | quote }}
+          volumeMounts:
+            - name: data
+              mountPath: /var/opt/mssql
+          readinessProbe:
+              exec:
+                command:
+                  - /bin/sh
+                  - -c
+                  - /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -C -Q "SELECT 1"
+              initialDelaySeconds: 30
+              periodSeconds: 10
+              timeoutSeconds: 3
+              failureThreshold: 12
+          livenessProbe:
+              exec:
+                command:
+                  - /bin/sh
+                  - -c
+                  - /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -C -Q "SELECT 1"
+              initialDelaySeconds: 60
+              periodSeconds: 20
+              timeoutSeconds: 3
+              failureThreshold: 6
+          resources:
+                {{- toYaml .Values.resources | nindent 12 }}
+      volumes:
+            - name: data
+              persistentVolumeClaim:
+                claimName: {{ .Release.Name }}-data

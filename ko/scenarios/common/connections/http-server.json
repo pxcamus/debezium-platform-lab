@@ -1,0 +1,10 @@
+{
+  "name": "${DMP_RESOURCE_PREFIX}-${DMP_ENVIRONMENT}-http-server",
+  "type": "HTTP",
+  "config": {
+    "url": "${HTTPSERVER_DMP_CONNECTION_STRING}"
+  },
+  "_meta": {
+    "validateConnection": false
+  }
+}

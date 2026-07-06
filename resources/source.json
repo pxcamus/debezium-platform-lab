@@ -1,0 +1,14 @@
+{
+  "name": "test-source",
+  "description": "Yummy data source",
+  "type": "io.debezium.connector.sqlserver.SqlServerConnector",
+  "schema": "pappdb_import",
+  "vaults": [],
+  "connection": {
+    "id": 1
+  },
+  "config": {
+    "topic.prefix": "bfs",
+    "schema.include.list": "bfs"
+  }
+}

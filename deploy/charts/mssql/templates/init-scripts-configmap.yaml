@@ -1,0 +1,17 @@
+{{- if .Values.initScripts.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-init-scripts
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: mssql
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+data:
+{{- $path := .Values.initScripts.path }}
+{{- range $file, $_ := .Files.Glob (printf "%s/*" $path) }}
+  {{ base $file }}: |-
+{{ $.Files.Get $file | nindent 4 }}
+{{- end }}
+{{- end }}

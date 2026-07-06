@@ -1,0 +1,75 @@
+{{- if .Values.initScripts.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-init-scripts
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: mssql
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "10"
+    "helm.sh/hook-delete-policy": {{ .Values.initScripts.hookDeletePolicy | quote }}
+spec:
+  backoffLimit: {{ .Values.initScripts.backoffLimit }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: mssql-init
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: init-scripts
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: MSSQL_HOST
+              value: {{ .Release.Name | quote }}
+            - name: MSSQL_PORT
+              value: {{ .Values.initScripts.port | quote }}
+            - name: MSSQL_USER
+              value: {{ .Values.initScripts.username | quote }}
+            - name: MSSQL_SA_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-sa-password
+                  key: password
+            - name: MSSQL_DATABASE
+              value: {{ .Values.initScripts.database | quote }}
+            - name: MSSQL_ENCRYPT
+              value: {{ .Values.initScripts.encrypt | quote }}
+            - name: MSSQL_TRUST_SERVER_CERTIFICATE
+              value: {{ .Values.initScripts.trustServerCertificate | quote }}
+          command:
+            - /bin/bash
+            - -c
+            - |
+              set -euo pipefail
+
+              cd /initdb
+
+              echo "Waiting for SQL Server at ${MSSQL_HOST}:${MSSQL_PORT}..."
+
+              until /opt/mssql-tools18/bin/sqlcmd \
+                -S "${MSSQL_HOST},${MSSQL_PORT}" \
+                -U sa \
+                -P "${MSSQL_SA_PASSWORD}" \
+                -C \
+                -Q "SELECT 1" >/dev/null 2>&1; do
+                sleep 5
+              done
+
+              echo "SQL Server is ready. Running init scripts..."
+
+              /bin/bash /initdb/entrypoint.sh
+          volumeMounts:
+            - name: init-scripts
+              mountPath: /initdb
+      volumes:
+        - name: init-scripts
+          configMap:
+            name: {{ .Release.Name }}-init-scripts
+{{- end }}

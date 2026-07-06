@@ -1,0 +1,33 @@
+replicaCount: 1
+
+image:
+  repository: cdc-dashboard
+  tag: latest-2
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 8480
+
+config:
+  httpAddr: ":8480"
+  logLevel: "info"
+  mongodbDatabase: "ecommerce"
+  postgresSchema: "public"
+
+secret:
+  mongodbUri: "mongodb://app_owner:app_owner@mongodb-0.mongodb-svc.databases.svc.cluster.local:27017,mongodb-1.mongodb-svc.databases.svc.cluster.local:27017,mongodb-2.mongodb-svc.databases.svc.cluster.local:27017/ecommerce?authSource=admin&replicaSet=rs0"
+  postgresUri: "postgres://app_owner:app_owner@postgresql-rw.databases.svc.cluster.local:5432/ecommerce?sslmode=disable"
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+ingress:
+  enabled: false
+  className: ""
+  host: cdc-dashboard.local

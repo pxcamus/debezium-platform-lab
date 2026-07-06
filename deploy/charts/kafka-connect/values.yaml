@@ -1,0 +1,26 @@
+replicas: 1
+
+image:
+#  repository: quay.io/debezium/connect
+  repository: local/debezium-connect-apicurio
+  tag: "3.6.0.Beta1-pxc1"
+  pullPolicy: IfNotPresent
+
+bootstrapServers: my-cluster-kafka-bootstrap.kafka:9092
+
+config:
+  groupId: debezium-connect-cluster
+  configStorageTopic: debezium-connect-configs
+  offsetStorageTopic: debezium-connect-offsets
+  statusStorageTopic: debezium-connect-statuses
+  replicationFactor: 1
+
+service:
+  type: ClusterIP
+  port: 8083
+
+ingress:
+  enabled: true
+  className: nginx
+  host: kafka-connect.platform.debezium.local
+  annotations: {}

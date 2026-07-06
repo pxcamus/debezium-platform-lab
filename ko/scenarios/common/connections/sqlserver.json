@@ -1,0 +1,13 @@
+{
+  "name": "${DMP_RESOURCE_PREFIX}-${DMP_ENVIRONMENT}-sqlserver",
+  "type": "SQLSERVER",
+  "config": {
+    "hostname": "${SQLSERVER_DMP_HOSTNAME}",
+    "port": 1433,
+    "username": "${SQLSERVER_DMP_USERNAME}",
+    "password": "${SQLSERVER_DMP_PASSWORD}",
+    "database": "${SQLSERVER_DMP_DATABASE}",
+    "encrypt": "${SQLSERVER_DMP_ENCRYPT}",
+    "trustServerCertificate": "${SQLSERVER_DMP_TRUST_SERVER_CERTIFICATE}"
+  }
+}

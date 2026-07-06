@@ -1,0 +1,11 @@
+{
+  "name": "sqlserver-connection",
+  "type": "SQLSERVER",
+  "config": {
+    "hostname": "localhost",
+    "port": 1433,
+    "username": "sa",
+    "password": "StrongPassword1!",
+    "database": "pappdb_import"
+  }
+}

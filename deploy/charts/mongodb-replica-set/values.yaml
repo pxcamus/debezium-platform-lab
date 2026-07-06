@@ -1,0 +1,8 @@
+mongodb:
+  users:
+    admin:
+      password: "admin"
+    appOwner:
+      password: "app_owner"
+    debezium:
+      password: "debezium"

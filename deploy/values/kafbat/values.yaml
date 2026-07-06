@@ -1,0 +1,23 @@
+yamlApplicationConfig:
+  kafka:
+    clusters:
+      - name: yaml
+        bootstrapServers: my-cluster-kafka-bootstrap.kafka:9092
+        schemaRegistry: http://apicurio-registry.apicurio.svc.cluster.local:8080/apis/ccompat/v7
+  auth:
+    type: disabled
+  management:
+    health:
+      ldap:
+        enabled: false
+
+service:
+  type: ClusterIP
+  port: 80
+
+ingress:
+  enabled: true
+  ingressClassName: nginx
+  host: kafbat.platform.debezium.local
+  path: /
+  pathType: Prefix

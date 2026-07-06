@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "apicurio-registry.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: apicurio-registry
+    app.kubernetes.io/component: registry
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  type: {{ .Values.registry.service.type }}
+  ports:
+    - name: http
+      port: {{ .Values.registry.service.port }}
+      targetPort: http
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: apicurio-registry
+    app.kubernetes.io/component: registry
+    app.kubernetes.io/instance: {{ .Release.Name }}

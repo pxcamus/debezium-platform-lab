@@ -1,0 +1,15 @@
+{
+  "name": "test-pipeline-2",
+  "description": "Demo pipeline",
+  "source": {
+    "id": 151,
+    "name": "demo-postgres-stc"
+  },
+  "destination": {
+    "id": 1,
+    "name": "demo-kafka-destination"
+  },
+  "transforms": [],
+  "logLevel": "INFO",
+  "logLevels": {}
+}

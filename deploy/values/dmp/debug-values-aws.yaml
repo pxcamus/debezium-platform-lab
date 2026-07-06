@@ -1,0 +1,31 @@
+env:
+  - name: JAVA_TOOL_OPTIONS
+    value: >-
+      -Djavax.net.ssl.trustStore=/etc/docdb-truststore/docdb-truststore.p12
+      -Djavax.net.ssl.trustStoreType=PKCS12
+      -Djavax.net.ssl.trustStorePassword=changeit
+conductor:
+  image: quay.io/debezium/platform-conductor:3.6.0-SNAPSHOT-3int
+  imagePullPolicy: Never
+  descriptors:
+    official:
+      mountPath: /opt/descriptors
+  extraVolumes:
+    - name: docdb-truststore
+      configMap:
+        name: docdb-truststore
+  extraVolumeMounts:
+    - name: docdb-truststore
+      mountPath: /etc/docdb-truststore
+      readOnly: true
+stage:
+  image: quay.io/debezium/platform-stage:3.6.0-SNAPSHOT-3int
+  imagePullPolicy: Never
+ingress:
+  className: traefik
+domain:
+  name: platform.debezium.io
+database:
+  enabled: true
+debezium-operator:
+  enabled: false

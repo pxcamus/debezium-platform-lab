@@ -1,0 +1,39 @@
+name: postgres-basic
+description: PostgreSQL source to Kafka destination
+
+#payloads:
+#  connections:
+#    - payloads/connection-db.json
+#    - payloads/connection-kafka.json
+#  sources:
+#    - payloads/source.json
+#  destinations:
+#    - payloads/destination.json
+#  transforms: []
+#  pipelines:
+#    - payloads/pipeline.json
+
+connections:
+  - key: postgres
+    file: payloads/connection-db.json
+  - key: kafka
+    file: payloads/connection-kafka.json
+
+#sources:
+#  - key: postgres
+#    file: payloads/source.json
+#    refs:
+#      connection: postgres
+#
+#destinations:
+#  - key: kafka
+#    file: payloads/destination.json
+#    refs:
+#      connection: kafka
+
+validation:
+  hurl:
+    - validate/api.hurl
+  scripts:
+    - validate/k8s.sh
+    - validate/kafka-topic.sh

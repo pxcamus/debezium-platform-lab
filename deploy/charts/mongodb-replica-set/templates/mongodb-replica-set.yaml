@@ -1,0 +1,171 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mongodb-admin-password
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: mongodb-replica-set
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+type: Opaque
+stringData:
+  password: {{ required "mongodb.users.admin.password is required" .Values.mongodb.users.admin.password | quote }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mongodb-app-owner-password
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: mongodb-replica-set
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+type: Opaque
+stringData:
+  password: {{ required "mongodb.users.appOwner.password is required" .Values.mongodb.users.appOwner.password | quote }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mongodb-debezium-password
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: mongodb-replica-set
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+type: Opaque
+stringData:
+  password: {{ required "mongodb.users.debezium.password is required" .Values.mongodb.users.debezium.password | quote }}
+---
+apiVersion: mongodbcommunity.mongodb.com/v1
+kind: MongoDBCommunity
+metadata:
+  name: mongodb
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: mongodb-replica-set
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  members: 3
+  type: ReplicaSet
+  version: "7.0.12"
+
+  security:
+    authentication:
+      modes:
+        - SCRAM
+
+  users:
+    - name: admin
+      db: admin
+      passwordSecretRef:
+        name: mongodb-admin-password
+      roles:
+        - name: root
+          db: admin
+      scramCredentialsSecretName: mongodb-admin-scram
+
+    - name: app_owner
+      db: admin
+      passwordSecretRef:
+        name: mongodb-app-owner-password
+      roles:
+        - name: readWrite
+          db: ecommerce
+        - name: dbAdmin
+          db: ecommerce
+      scramCredentialsSecretName: mongodb-app-owner-scram
+
+    - name: debezium
+      db: admin
+      passwordSecretRef:
+        name: mongodb-debezium-password
+      roles:
+        - name: readAnyDatabase
+          db: admin
+        - name: clusterMonitor
+          db: admin
+      scramCredentialsSecretName: mongodb-debezium-scram
+
+  statefulSet:
+    spec:
+      volumeClaimTemplates:
+        - metadata:
+            name: data-volume
+          spec:
+            storageClassName: standard
+            accessModes:
+              - ReadWriteOnce
+            resources:
+              requests:
+                storage: 10Gi
+        - metadata:
+            name: logs-volume
+          spec:
+            storageClassName: standard
+            accessModes:
+              - ReadWriteOnce
+            resources:
+              requests:
+                storage: 2Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongodb-0-lb
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: mongodb-replica-set
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  type: LoadBalancer
+  ports:
+    - name: mongodb
+      port: 27017
+      targetPort: 27017
+      protocol: TCP
+  selector:
+    app: mongodb-svc
+    statefulset.kubernetes.io/pod-name: mongodb-0
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongodb-1-lb
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: mongodb-replica-set
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  type: LoadBalancer
+  ports:
+    - name: mongodb
+      port: 27017
+      targetPort: 27017
+      protocol: TCP
+  selector:
+    app: mongodb-svc
+    statefulset.kubernetes.io/pod-name: mongodb-1
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongodb-2-lb
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: mongodb-replica-set
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  type: LoadBalancer
+  ports:
+    - name: mongodb
+      port: 27017
+      targetPort: 27017
+      protocol: TCP
+  selector:
+    app: mongodb-svc
+    statefulset.kubernetes.io/pod-name: mongodb-2

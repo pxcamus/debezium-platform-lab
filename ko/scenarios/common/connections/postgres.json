@@ -1,0 +1,11 @@
+{
+  "name": "${DMP_RESOURCE_PREFIX}-${DMP_ENVIRONMENT}-postgres",
+  "type": "POSTGRESQL",
+  "config": {
+    "port": ${POSTGRES_DMP_PORT},
+    "database": "${POSTGRES_DMP_DATABASE}",
+    "hostname": "${POSTGRES_DMP_HOST}",
+    "password": "${POSTGRES_DMP_PASSWORD}",
+    "username": "${POSTGRES_DMP_USERNAME}"
+  }
+}

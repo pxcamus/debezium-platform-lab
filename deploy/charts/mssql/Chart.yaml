@@ -1,0 +1,6 @@
+apiVersion: v2
+name: mssql
+description: SQL Server 2022 for local Debezium development
+type: application
+version: 0.1.0
+appVersion: "2022-latest"

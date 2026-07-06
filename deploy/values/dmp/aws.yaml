@@ -1,0 +1,20 @@
+env:
+  - name: JAVA_TOOL_OPTIONS
+    value: "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005"
+conductor:
+  image: quay.io/debezium/platform-conductor:nightly
+  imagePullPolicy: IfNotPresent
+  descriptors:
+    official:
+      mountPath: /tmp/descriptors
+stage:
+  image: quay.io/debezium/platform-stage:nightly
+  imagePullPolicy: IfNotPresent
+ingress:
+  className: traefik
+domain:
+  name: platform.debezium.io
+database:
+  enabled: true
+debezium-operator:
+  enabled: false

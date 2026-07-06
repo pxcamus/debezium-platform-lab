@@ -1,0 +1,13 @@
+{
+  "name": "${DMP_RESOURCE_PREFIX}-${DMP_ENVIRONMENT}-sqlserver-2022",
+  "description": "SQL Server 2022 source",
+  "type": "io.debezium.connector.sqlserver.SqlServerConnector",
+  "schema": "schema321",
+  "connection": {},
+  "vaults": [],
+  "config": {
+    "topic.prefix": "ecomm-sqlserver",
+    "schema.include.list": "data",
+    "table.include.list": "ecommerce.data.order_items,ecommerce.data.users,ecommerce.data.categories,ecommerce.data.products,ecommerce.data.orders"
+  }
+}

@@ -1,0 +1,2 @@
+secret:
+  mongodbUri: "mongodb://app_owner:app_owner@mongodb-0.mongodb-svc.databases.svc.cluster.local:27017,mongodb-1.mongodb-svc.databases.svc.cluster.local:27017,mongodb-2.mongodb-svc.databases.svc.cluster.local:27017/ecommerce?authSource=admin&replicaSet=mongodb"

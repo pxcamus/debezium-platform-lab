@@ -1,0 +1,11 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: wildcard-erebor-1int-io
+spec:
+  dnsNames:
+  - '*.erebor.1int.io'
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  secretName: wildcard-erebor-1int-io-tls

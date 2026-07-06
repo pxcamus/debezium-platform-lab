@@ -1,0 +1,19 @@
+# Local environment / secrets (never commit)
+.env
+.env.*.local
+# but keep the committed template (a global ~/.gitignore may ignore .env*)
+!.env.example
+*.kubeconfig
+kubeconfig*
+
+# Symlinked / external working dirs
+examples
+/kafka/
+/docs
+/thorin
+
+# IDE
+.idea/
+
+# OS
+.DS_Store

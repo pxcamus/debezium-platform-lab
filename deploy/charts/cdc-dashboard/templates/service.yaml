@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "cdc-dashboard.fullname" . }}
+  labels:
+    app.kubernetes.io/name: {{ include "cdc-dashboard.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - name: http
+      port: {{ .Values.service.port }}
+      targetPort: http
+  selector:
+    app.kubernetes.io/name: {{ include "cdc-dashboard.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}

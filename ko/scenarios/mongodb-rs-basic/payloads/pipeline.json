@@ -1,0 +1,15 @@
+{
+  "name": "${DMP_RESOURCE_PREFIX}-${DMP_ENVIRONMENT}-mongodb-rs-basic-pipeline",
+  "description": "MongoDB replica set source to Kafka string destination",
+  "source": {
+    "id": 0,
+    "name": ""
+  },
+  "destination": {
+    "id": 0,
+    "name": ""
+  },
+  "transforms": [],
+  "logLevel": "INFO",
+  "logLevels": {}
+}

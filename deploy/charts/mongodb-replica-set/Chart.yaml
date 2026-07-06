@@ -1,0 +1,6 @@
+apiVersion: v2
+name: mongodb-replica-set
+description: MongoDB Community replica set for local Debezium development
+type: application
+version: 0.1.0
+appVersion: "7.0.12"

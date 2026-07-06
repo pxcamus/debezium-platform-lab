@@ -1,0 +1,226 @@
+helmDefaults:
+  wait: true
+  timeout: 120
+  atomic: true
+
+repositories:
+  - name: ingress-nginx
+    url: https://kubernetes.github.io/ingress-nginx
+
+  - name: jetstack
+    url: https://charts.jetstack.io
+
+  - name: cert-manager-webhook-gandi
+    url: https://sintef.github.io/cert-manager-webhook-gandi
+
+  - name: kafbat-ui
+    url: https://kafbat.github.io/helm-charts
+
+  - name: cloudnative-pg
+    url: https://cloudnative-pg.github.io/charts
+
+  - name: mongodb
+    url: https://mongodb.github.io/helm-charts
+
+  - name: debezium
+    url: https://charts.debezium.io
+
+releases:
+  - name: ingress-nginx
+    namespace: ingress-nginx
+    createNamespace: true
+    chart: ingress-nginx/ingress-nginx
+    installed: {{ eq (env "DBZ_ENV" | default "local") "local" }}
+    labels:
+      app: ingress-nginx
+      component: ingress
+      infra: "true"
+    set:
+      - name: controller.hostPort.enabled
+        value: true
+
+  - name: cert-manager
+    namespace: cert-manager
+    createNamespace: true
+    chart: jetstack/cert-manager
+    labels:
+      app: cert-manager
+      component: cert-manager
+      infra: "true"
+    values:
+      - values/cert-manager/{{ env "DBZ_ENV" | default "local" }}.yaml
+
+  - name: cert-manager-webhook-gandi
+    namespace: cert-manager
+    createNamespace: true
+    chart: cert-manager-webhook-gandi/cert-manager-webhook-gandi
+    installed: {{ eq (env "DBZ_ENV" | default "erebor") "erebor" }}
+    labels:
+      app: cert-manager-webhook-gandi
+      component: cert-manager-webhook-gandi
+      infra: "true"
+    values:
+      - values/cert-manager-webhook-gandi/{{ env "DBZ_ENV" | default "erebor" }}.yaml
+
+  - name: strimzi-cluster-operator
+    namespace: kafka
+    createNamespace: true
+    chart: oci://quay.io/strimzi-helm/strimzi-kafka-operator
+    labels:
+      app: strimzi-cluster-operator
+      component: kafka-operator
+      infra: "true"
+
+  - name: kafka-cluster
+    namespace: kafka
+    createNamespace: true
+    chart: ./charts/kafka-cluster
+    labels:
+      app: kafka-cluster
+      component: kafka
+      infra: "true"
+    needs:
+      - kafka/strimzi-cluster-operator
+
+#  - name: kafka-connect
+#    namespace: kafka
+#    createNamespace: true
+#    chart: ./charts/kafka-connect
+#    labels:
+#      app: kafka-connect
+#      component: kafka-connect
+#      infra: "true"
+#      cdc: "true"
+#    needs:
+#      - kafka/kafka-cluster
+#      - databases/postgresql-cluster
+
+  - name: kafbat-ui
+    namespace: kafka
+    createNamespace: true
+    chart: kafbat-ui/kafka-ui
+    labels:
+      app: kafbat-ui
+      component: kafka-ui
+      infra: "true"
+    values:
+      - values/kafbat/values.yaml
+    needs:
+      - kafka/kafka-cluster
+
+  - name: cnpg-operator
+    namespace: databases
+    createNamespace: true
+    chart: cloudnative-pg/cloudnative-pg
+    labels:
+      app: cnpg-operator
+      component: postgres-operator
+      infra: "true"
+
+  - name: postgresql-cluster
+    namespace: databases
+    createNamespace: true
+    chart: ./charts/postgresql-cluster
+    labels:
+      app: postgresql-cluster
+      component: postgres
+      infra: "true"
+    needs:
+      - databases/cnpg-operator
+
+  - name: mongodb-community-operator
+    namespace: databases
+    createNamespace: true
+    chart: mongodb/community-operator
+    labels:
+      app: mongodb-community-operator
+      component: mongodb-operator
+      infra: "true"
+    values:
+      - values/mongodb/values.yaml
+
+  - name: mongodb-replica-set
+    namespace: databases
+    createNamespace: true
+    chart: ./charts/mongodb-replica-set
+    labels:
+      app: mongodb-replica-set
+      component: mongodb
+      infra: "true"
+    needs:
+      - databases/mongodb-community-operator
+
+  - name: mssql
+    namespace: databases
+    createNamespace: false
+    chart: ./charts/mssql
+    labels:
+      app: mssql
+      component: mssql
+      infra: "true"
+    values:
+      - values/mssql/{{ env "DBZ_ENV" | default "local" }}.yaml
+
+  - name: http-server
+    namespace: tools
+    createNamespace: true
+    chart: ./charts/http-server
+    labels:
+      app: http-server
+      component: mock-server
+      infra: "true"
+    values:
+      - values/http-server/{{ env "DBZ_ENV" | default "local" }}.yaml
+
+  - name: cdc-dashboard
+    namespace: tools
+    createNamespace: true
+    chart: ./charts/cdc-dashboard
+    labels:
+      app: cdc-dashboard
+      component: cdc-dashboard
+      infra: "false"
+    values:
+      - values/cdc-dashboard/local.yaml
+    needs:
+      - databases/mongodb-replica-set
+
+  - name: apicurio-registry
+    namespace: apicurio
+    createNamespace: true
+    chart: ./charts/apicurio-registry
+    labels:
+      app: apicurio-registry
+      component: schema-registry
+      infra: "false"
+    values:
+      - values/apicurio/{{ env "DBZ_ENV" | default "local" }}.yaml
+    needs:
+      - databases/postgresql-cluster
+
+  - name: debezium-operator
+    namespace: '{{ env "DBZ_NAMESPACE" | default "dmp" }}'
+    createNamespace: true
+    chart: debezium/debezium-operator
+    version: '{{ requiredEnv "DBZ_VERSION" }}'
+    labels:
+      app: debezium-operator
+      component: operator
+
+  - name: debezium-platform
+    namespace: '{{ env "DBZ_NAMESPACE" | default "dmp" }}'
+    createNamespace: true
+    chart: debezium/debezium-platform
+    version: '{{ requiredEnv "DBZ_VERSION" }}'
+    labels:
+      app: debezium-platform
+      component: platform
+    values:
+      - values/dmp/{{ env "DBZ_ENV" | default "local" }}.yaml
+    set:
+      - name: conductor.image
+        value: quay.io/debezium/platform-conductor:{{ env "DBZ_IMAGE_TAG_CONDUCTOR" | default "nightly" }}
+      - name: stage.image
+        value: quay.io/debezium/platform-stage:{{ env "DBZ_IMAGE_TAG" | default "nightly" }}
+      - name: conductor.descriptors.official.tag
+        value: {{ env "DBZ_IMAGE_TAG" | default "nightly" }}

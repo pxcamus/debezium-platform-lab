@@ -1,0 +1,16 @@
+{
+  "name": "test-pipeline",
+  "description": "It goes from here to there!",
+  "source": {
+    "id": 2,
+    "name": "test-source"
+  },
+  "destination": {
+    "id": 1,
+    "name": "test-destination"
+  },
+  "logLevel": "INFO",
+  "logLevels": {
+    "io.debezium.pipeline.EventDispatcher": "TRACE"
+  }
+}

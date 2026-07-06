@@ -1,0 +1,16 @@
+{
+  "name": "${DMP_RESOURCE_PREFIX}-${DMP_ENVIRONMENT}-mongodb-rs-basic-source",
+  "description": "MongoDB replica set source",
+  "type": "io.debezium.connector.mongodb.MongoDbConnector",
+  "schema": "schema321",
+  "connection": {
+    "id": 0,
+    "name": ""
+  },
+  "vaults": [],
+  "config": {
+    "topic.prefix": "ecommerce.mongodb",
+    "database.include.list": "ecommerce",
+    "collection.include.list": "ecommerce.categories,ecommerce.products,ecommerce.orders"
+  }
+}

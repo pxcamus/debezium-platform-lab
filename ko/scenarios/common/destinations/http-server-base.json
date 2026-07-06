@@ -1,0 +1,9 @@
+{
+  "name": "${DMP_RESOURCE_PREFIX}-${DMP_ENVIRONMENT}-http-server-destination",
+  "description": "Generic HTTP server",
+  "type": "io.debezium.server.http.HttpChangeConsumer",
+  "schema": "schema321",
+  "connection": {},
+  "vaults": [],
+  "config": {}
+}

@@ -1,0 +1,38 @@
+name: Test pg avro connector
+method: PUT
+url: http://kafka-connect.platform.debezium.local/connector-plugins/io.debezium.connector.postgresql.PostgresConnector/config/validate
+body:
+  content: |-
+    {
+        "name": "demo-connector",
+        "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+        "tasks.max": "1",
+
+        "database.hostname": "postgresql-rw.databases",
+        "database.port": "5432",
+        "database.user": "debezium",
+        "database.password": "debezium",
+        "database.dbname": "ecommerce",
+
+        "topic.prefix": "ecommerce",
+
+        "plugin.name": "pgoutput",
+        "publication.name": "dbz_publication",
+        "slot.name": "debezium_slot",
+
+        "snapshot.mode": "initial",
+        "table.include.list": "public.categories,public.products,public.users,public.orders,public.order_items,public.payments,public.inventory_logs",
+
+        "key.converter": "io.apicurio.registry.utils.converter.AvroConverter",
+        "key.converter.apicurio.registry.url": "http://apicurio-registry.apicurio.svc.cluster.local:8080/apis/registry/v3",
+        "key.converter.apicurio.registry.auto-register": "true",
+        "value.converter": "io.apicurio.registry.utils.converter.AvroConverter",
+        "value.converter.apicurio.registry.url": "http://apicurio-registry.apicurio.svc.cluster.local:8080/apis/registry/v3",
+        "value.converter.apicurio.registry.auto-register": "true",
+        "schema.name.adjustment.mode": "avro"
+
+    }
+  content_type: application/json
+headers:
+- name: content-type
+  value: application/json

@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "cdc-dashboard.fullname" . }}
+data:
+  HTTP_ADDR: {{ .Values.config.httpAddr | quote }}
+  LOG_LEVEL: {{ .Values.config.logLevel | quote }}
+  MONGODB_DATABASE: {{ .Values.config.mongodbDatabase | quote }}

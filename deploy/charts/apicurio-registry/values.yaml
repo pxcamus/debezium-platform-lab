@@ -1,0 +1,31 @@
+replicaCount: 1
+
+registry:
+  image:
+    repository: apicurio/apicurio-registry
+    tag: "3.2.4"
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 8080
+  resources: {}
+  env:
+    APICURIO_STORAGE_KIND: "sql"
+    APICURIO_STORAGE_SQL_KIND: "postgresql"
+
+ui:
+  image:
+    repository: apicurio/apicurio-registry-ui
+    tag: "3.2.4"
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 8080
+  resources: {}
+  env: {}
+
+ingress:
+  enabled: false
+  className: nginx
+  host: apicurio.platform.debezium.local
+  annotations: {}

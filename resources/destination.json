@@ -1,0 +1,14 @@
+{
+  "name": "test-destination",
+  "type": "kafka",
+  "description": "Some funny destination",
+  "schema": "dummy",
+  "vaults": [],
+  "connection": {
+    "id": 2
+  },
+  "config": {
+    "producer.key.serializer": "org.apache.kafka.common.serialization.StringSerializer",
+    "producer.value.serializer": "org.apache.kafka.common.serialization.StringSerializer"
+  }
+}

@@ -1,0 +1,6 @@
+apiVersion: v2
+name: apicurio-registry
+description: Apicurio Registry for local Debezium development
+type: application
+version: 0.1.0
+appVersion: "3.2.4"

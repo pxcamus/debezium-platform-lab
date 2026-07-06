@@ -1,0 +1,26 @@
+name: mongodb-rs-basic
+description: MongoDB Replica Set source to Kafka destination
+
+requires:
+  connections:
+    - mongodb
+    - kafka
+
+sources:
+  - key: mongodb
+    file: payloads/source.json
+    refs:
+      connection: mongodb
+
+destinations:
+  - key: kafka
+    file: payloads/destination.json
+    refs:
+      connection: kafka
+
+pipelines:
+  - key: mongodb-to-kafka
+    file: payloads/pipeline.json
+    refs:
+      source: mongodb
+      destination: kafka

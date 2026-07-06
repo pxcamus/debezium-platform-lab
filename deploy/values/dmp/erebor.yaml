@@ -1,0 +1,22 @@
+domain:
+  name: platform.debezium.erebor
+database:
+  enabled: true
+ingress:
+  className: traefik
+debezium-operator:
+  enabled: false
+conductor:
+  imagePullPolicy: IfNotPresent
+stage:
+  imagePullPolicy: IfNotPresent
+#monitoring:
+#  otel:
+#    enabled: true
+#    collector:
+#      image: ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector:0.152.0
+#  prometheus:
+#    serviceMonitor:
+#      enabled: true
+#      labels:
+#        release: kube-prometheus-stack

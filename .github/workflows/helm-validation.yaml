@@ -1,0 +1,54 @@
+name: Helm validation
+
+on:
+  pull_request:
+    paths:
+      - "deploy/charts/**"
+      - "deploy/values/**"
+      - "deploy/environment/**"
+      - "deploy/helmfile.yaml.gotmpl"
+      - ".github/workflows/helm.yaml"
+      - "scripts/validate-helm.sh"
+  push:
+    branches:
+      - main
+    paths:
+      - "deploy/charts/**"
+      - "deploy/values/**"
+      - "deploy/environment/**"
+      - "deploy/helmfile.yaml.gotmpl"
+      - ".github/workflows/helm.yaml"
+      - "scripts/validate-helm.sh"
+
+jobs:
+  helm:
+    name: Helm lint, template validation, unit tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+
+      - name: Install helm-unittest plugin
+        run: helm plugin install https://github.com/helm-unittest/helm-unittest.git --verify=false
+
+      - name: Install Helmfile
+        uses: helmfile/helmfile-action@v2
+        with:
+          helmfile-version: latest
+          helm-version: latest
+          helm-plugins: https://github.com/helm-unittest/helm-unittest.git
+          helmfile-args: ''
+
+      - name: Install kubeconform
+        run: |
+          curl -L "https://github.com/yannh/kubeconform/releases/latest/download/kubeconform-linux-amd64.tar.gz" \
+            | tar xz
+          sudo mv kubeconform /usr/local/bin/kubeconform
+          kubeconform -v
+
+      - name: Validate Helm assets
+        run: ./scripts/validate-helm.sh
