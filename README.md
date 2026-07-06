@@ -69,7 +69,7 @@ mage -l
 | `MONGODB_*` / `POSTGRESQL_*` / `SQLSERVER_*` | DB connection config | see `.env.example` |
 | `LOG_LEVEL` | `debug` \| `info` \| `warn` \| `error` | `info` |
 
-Known `DBZ_ENV` values in this repo: `local`, `erebor` (homelab), `aws`, `hetzner`. Each has a matching values file under `deploy/values/<component>/`.
+Known `DBZ_ENV` values in this repo: `local`, `homelab` (self-hosted k3s + public TLS), `aws`, `hetzner`. Each has a matching values file under `deploy/values/<component>/`.
 
 DMP JSON payloads use `${ENV_VAR}` syntax that is expanded from the environment at load time.
 
@@ -154,9 +154,9 @@ scripts/validate-helm.sh # Offline chart validation
 
 ## Optional: HTTPS via cert-manager + Gandi (homelab only)
 
-The files under [`certs/`](certs/) and the `cert-manager-webhook-gandi` release in the helmfile expose platform services over HTTPS using Let's Encrypt with a DNS-01 challenge solved through the [Gandi](https://www.gandi.net/) DNS API. **This is entirely optional and specific to a private homelab (`DBZ_ENV=erebor`, domain `*.erebor.1int.io`); a local Kind demo does not need it.**
+The files under [`certs/`](certs/) and the `cert-manager-webhook-gandi` release in the helmfile expose platform services over HTTPS using Let's Encrypt with a DNS-01 challenge solved through the [Gandi](https://www.gandi.net/) DNS API. **This is entirely optional and specific to a self-hosted homelab (`DBZ_ENV=homelab`, wildcard domain `*.example.com` — replace with your own); a local Kind demo does not need it.**
 
-The webhook release is gated on `DBZ_ENV=erebor`, so it is not installed for `local`. To use it in your own environment:
+The webhook release is gated on `DBZ_ENV=homelab`, so it is not installed for `local`. To use it in your own environment:
 
 1. Set your ACME registration email in `certs/letsencrypt-*-clusterissuer.yaml` (currently a placeholder).
 2. Provide your Gandi Personal Access Token. It is **not committed** — create the Secret out of band:
@@ -164,7 +164,7 @@ The webhook release is gated on `DBZ_ENV=erebor`, so it is not installed for `lo
    kubectl -n cert-manager create secret generic gandi-credentials \
      --from-literal=pat="$GANDI_PAT"
    ```
-   (`deploy/values/cert-manager-webhook-gandi/erebor.yaml` also carries a `gandiPat` placeholder for the webhook chart itself.)
+   (`deploy/values/cert-manager-webhook-gandi/homelab.yaml` also carries a `gandiPat` placeholder for the webhook chart itself.)
 3. Adjust the domains in `certs/*.yaml` to your own, then apply the ClusterIssuers and Certificate:
    ```bash
    kubectl apply -f certs/

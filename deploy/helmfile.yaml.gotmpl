@@ -43,6 +43,7 @@ releases:
     namespace: cert-manager
     createNamespace: true
     chart: jetstack/cert-manager
+    installed: {{ eq (env "DBZ_ENV" | default "local") "homelab" }}
     labels:
       app: cert-manager
       component: cert-manager
@@ -54,13 +55,13 @@ releases:
     namespace: cert-manager
     createNamespace: true
     chart: cert-manager-webhook-gandi/cert-manager-webhook-gandi
-    installed: {{ eq (env "DBZ_ENV" | default "erebor") "erebor" }}
+    installed: {{ eq (env "DBZ_ENV" | default "local") "homelab" }}
     labels:
       app: cert-manager-webhook-gandi
       component: cert-manager-webhook-gandi
       infra: "true"
     values:
-      - values/cert-manager-webhook-gandi/{{ env "DBZ_ENV" | default "erebor" }}.yaml
+      - values/cert-manager-webhook-gandi/{{ env "DBZ_ENV" | default "homelab" }}.yaml
 
   - name: strimzi-cluster-operator
     namespace: kafka
