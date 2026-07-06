@@ -1,0 +1,59 @@
+name: Go
+
+on:
+  pull_request:
+    paths:
+      - "**/*.go"
+      - "go.mod"
+      - "go.sum"
+      - ".github/workflows/go.yaml"
+  push:
+    branches:
+      - main
+    paths:
+      - "**/*.go"
+      - "go.mod"
+      - "go.sum"
+      - ".github/workflows/go.yaml"
+
+jobs:
+  go:
+    name: Format, vet, build, mage compile
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Verify go.mod is tidy
+        run: |
+          go mod tidy
+          git diff --exit-code -- go.mod go.sum
+
+      - name: Check formatting
+        run: |
+          unformatted="$(gofmt -l .)"
+          if [[ -n "${unformatted}" ]]; then
+            echo "The following files are not gofmt-clean:"
+            echo "${unformatted}"
+            echo "Run 'gofmt -w .' to fix."
+            exit 1
+          fi
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Build
+        run: go build ./...
+
+      # magefile.go carries the //go:build mage tag, so it is excluded from the
+      # plain build/vet above. 'mage -l' compiles it in isolation, which is the
+      # only way to catch magefile compile errors in CI.
+      - name: Compile magefile
+        run: go run github.com/magefile/mage -l

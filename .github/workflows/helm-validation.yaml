@@ -7,7 +7,7 @@ on:
       - "deploy/values/**"
       - "deploy/environment/**"
       - "deploy/helmfile.yaml.gotmpl"
-      - ".github/workflows/helm.yaml"
+      - ".github/workflows/helm-validation.yaml"
       - "scripts/validate-helm.sh"
   push:
     branches:
@@ -17,7 +17,7 @@ on:
       - "deploy/values/**"
       - "deploy/environment/**"
       - "deploy/helmfile.yaml.gotmpl"
-      - ".github/workflows/helm.yaml"
+      - ".github/workflows/helm-validation.yaml"
       - "scripts/validate-helm.sh"
 
 jobs:
