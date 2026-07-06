@@ -25,6 +25,9 @@ repositories:
   - name: debezium
     url: https://charts.debezium.io
 
+  - name: project-zot
+    url: http://zotregistry.dev/helm-charts
+
 releases:
   - name: ingress-nginx
     namespace: ingress-nginx
@@ -62,6 +65,26 @@ releases:
       infra: "true"
     values:
       - values/cert-manager-webhook-gandi/{{ env "DBZ_ENV" | default "homelab" }}.yaml
+
+  # OCI registry (zot), homelab only. Fronted by Traefik with the wildcard TLS
+  # secret that already lives in the `registry` namespace. The real host + cert
+  # secret name + htpasswd hash come from values/zot/homelab.secret.yaml, which is
+  # git-ignored (see .gitignore) and only referenced when DBZ_ENV=homelab.
+  - name: zot
+    namespace: registry
+    createNamespace: true
+    chart: project-zot/zot
+    version: 0.1.121
+    installed: {{ eq (env "DBZ_ENV" | default "local") "homelab" }}
+    labels:
+      app: zot
+      component: registry
+      infra: "true"
+    values:
+      - values/zot/homelab.yaml
+{{- if eq (env "DBZ_ENV" | default "local") "homelab" }}
+      - values/zot/homelab.secret.yaml
+{{- end }}
 
   - name: strimzi-cluster-operator
     namespace: kafka

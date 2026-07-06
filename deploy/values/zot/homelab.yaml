@@ -1,0 +1,84 @@
+# Zot OCI registry — homelab (k3s + public wildcard TLS via cert-manager)
+#
+# Wired into deploy/helmfile.yaml.gotmpl as the `zot` release, gated on
+# DBZ_ENV=homelab. Applied via:
+#   helmfile --file deploy/helmfile.yaml.gotmpl --selector app=zot apply
+# (or as part of --selector infra=true). Standalone equivalent:
+#   helm upgrade --install zot project-zot/zot -n registry \
+#     -f deploy/values/zot/homelab.yaml -f deploy/values/zot/homelab.secret.yaml
+#
+# Public repo: the real domain and htpasswd hash are placeholders here. Supply the
+# real values from deploy/values/zot/homelab.secret.yaml — a git-ignored overlay
+# (matched by deploy/values/**/*.secret.yaml) layered on top of this file. Create it
+# with a real host, cert secret name, arm64 image override, and:
+#   htpasswd -bBn admin 'your-strong-password'   # -> the $2y$ line for secretFiles.htpasswd
+image:
+  # Extended build (includes the search/ui extensions) — arch-specific.
+  # amd64 default; override to zot-linux-arm64 in a local overlay for arm64 nodes.
+  # The plain ghcr.io/project-zot/zot tag is the MINIMAL build with NO web UI.
+  repository: ghcr.io/project-zot/zot-linux-amd64
+  tag: "v2.1.18"
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP        # Traefik fronts it; no NodePort needed
+  port: 5000
+
+# Persist registry blobs on a PVC backed by k3s local-path
+persistence: true
+pvc:
+  create: true
+  accessModes: ["ReadWriteOnce"]
+  storage: 20Gi
+  storageClassName: local-path   # k3s default
+
+# Mount the htpasswd secret at /secret/htpasswd (override the hash in a local overlay)
+mountSecret: true
+secretFiles:
+  htpasswd: |-
+    admin:$2y$05$REPLACE_WITH_OUTPUT_FROM_htpasswd_-bBn
+
+# Mount an explicit zot config at /etc/zot/config.json enabling htpasswd auth
+mountConfig: true
+configFiles:
+  config.json: |-
+    {
+      "storage": {
+        "rootDirectory": "/var/lib/registry"
+      },
+      "http": {
+        "address": "0.0.0.0",
+        "port": "5000",
+        "readTimeout": "60s",
+        "writeTimeout": "60s",
+        "auth": {
+          "htpasswd": {
+            "path": "/secret/htpasswd"
+          }
+        }
+      },
+      "log": {
+        "level": "info"
+      },
+      "extensions": {
+        "search": {
+          "enable": true
+        },
+        "ui": {
+          "enable": true
+        }
+      }
+    }
+
+ingress:
+  enabled: true
+  className: traefik
+  pathtype: Prefix
+  hosts:
+    - host: registry.example.com          # override with your real host in a local overlay
+      paths:
+        - path: /
+  tls:
+    - secretName: wildcard-example-com-tls # override with your real cert secret in a local overlay
+      hosts:
+        - registry.example.com
