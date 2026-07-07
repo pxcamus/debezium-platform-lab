@@ -57,7 +57,11 @@ func (Helm) All() error {
 		return err
 	}
 
-	if err := run("helmfile", "--file", "deploy/helmfile.yaml.gotmpl", "--selector", "infra=true", "apply"); err != nil {
+	// --skip-diff-on-install: the infra batch includes kube-prometheus-stack, whose
+	// own CRDs (Prometheus/Alertmanager/PrometheusRule) can't be resolved by the
+	// helm-diff preview on a fresh cluster. Skipping diff for not-yet-installed
+	// releases lets Helm install those CRDs before the resources that use them.
+	if err := run("helmfile", "--file", "deploy/helmfile.yaml.gotmpl", "--selector", "infra=true", "apply", "--skip-diff-on-install"); err != nil {
 		return err
 	}
 
@@ -118,6 +122,25 @@ func (Helm) Infra() error {
 	}
 
 	return run("helmfile", "--file", "deploy/helmfile.yaml.gotmpl", "--selector", "infra=true", "apply")
+}
+
+// Monitoring applies the monitoring foundation (kube-prometheus-stack, then the
+// OpenTelemetry Operator). Homelab only; both are also part of the infra=true batch.
+//
+// --skip-diff-on-install: on a fresh cluster the helm-diff preview can't resolve the
+// chart's own CRDs (Prometheus/Alertmanager/PrometheusRule, OpenTelemetryCollector),
+// which aborts the apply with "no matches for kind ... ensure CRDs are installed first".
+// Skipping the diff for not-yet-installed releases lets Helm install the CRDs first.
+func (Helm) Monitoring() error {
+	if err := automation.LoadEnv(); err != nil {
+		return err
+	}
+
+	if err := run("helmfile", "--file", "deploy/helmfile.yaml.gotmpl", "--selector", "app=kube-prometheus-stack", "apply", "--skip-diff-on-install"); err != nil {
+		return err
+	}
+
+	return run("helmfile", "--file", "deploy/helmfile.yaml.gotmpl", "--selector", "app=opentelemetry-operator", "apply", "--skip-diff-on-install")
 }
 
 // PlatformDestroy uninstalls the Debezium Platform and Operator releases.

@@ -28,6 +28,12 @@ repositories:
   - name: project-zot
     url: http://zotregistry.dev/helm-charts
 
+  - name: prometheus-community
+    url: https://prometheus-community.github.io/helm-charts
+
+  - name: open-telemetry
+    url: https://open-telemetry.github.io/opentelemetry-helm-charts
+
 releases:
   - name: ingress-nginx
     namespace: ingress-nginx
@@ -221,6 +227,43 @@ releases:
       - values/apicurio/{{ env "DBZ_ENV" | default "local" }}.yaml.gotmpl
     needs:
       - databases/postgresql-cluster
+
+  # Monitoring foundation (homelab only). Both are labelled infra:true so the
+  # `--selector infra=true` batch in `mage helm:all` installs them (and their
+  # ServiceMonitor / OpenTelemetryCollector CRDs) BEFORE debezium-platform.
+  #
+  # kube-prometheus-stack ships very large CRDs; the repo-wide helmDefaults
+  # (wait+atomic, timeout 120) can time out or hit the client-side
+  # "metadata.annotations: Too long" limit on first install. We bump timeout
+  # here; if the annotation error appears, install once with `--server-side`.
+  - name: kube-prometheus-stack
+    namespace: monitoring
+    createNamespace: true
+    chart: prometheus-community/kube-prometheus-stack
+    version: '{{ requiredEnv "KUBE_PROMETHEUS_STACK_VERSION" }}'
+    installed: {{ eq (env "DBZ_ENV" | default "local") "homelab" }}
+    timeout: 600
+    labels:
+      app: kube-prometheus-stack
+      component: monitoring
+      infra: "true"
+    values:
+      - values/kube-prometheus-stack/homelab.yaml.gotmpl
+
+  # OpenTelemetry Operator — reconciles the OpenTelemetryCollector CR that the
+  # debezium-platform chart creates when monitoring.otel.enabled=true. In homelab
+  # cert-manager is present, so the operator's admission-webhook certs work with
+  # no extra config.
+  - name: opentelemetry-operator
+    namespace: monitoring
+    createNamespace: true
+    chart: open-telemetry/opentelemetry-operator
+    version: '{{ requiredEnv "OTEL_OPERATOR_VERSION" }}'
+    installed: {{ eq (env "DBZ_ENV" | default "local") "homelab" }}
+    labels:
+      app: opentelemetry-operator
+      component: monitoring
+      infra: "true"
 
   - name: debezium-operator
     namespace: '{{ env "DBZ_NAMESPACE" | default "dmp" }}'

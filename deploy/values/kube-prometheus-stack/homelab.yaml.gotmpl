@@ -1,0 +1,61 @@
+# kube-prometheus-stack — homelab (k3s + Traefik + cert-manager wildcard TLS)
+#
+# Wired into deploy/helmfile.yaml.gotmpl as the `kube-prometheus-stack` release,
+# gated on DBZ_ENV=homelab, labelled infra:true. Applied via:
+#   helmfile --file deploy/helmfile.yaml.gotmpl --selector app=kube-prometheus-stack apply
+# (or as part of --selector infra=true / `mage helm:all` / `mage helm:monitoring`).
+#
+# The Grafana admin password is NOT in this committed file — supply it from
+# deploy/values/kube-prometheus-stack/homelab.secret.yaml, a git-ignored overlay
+# (matched by deploy/values/**/*.secret.yaml) layered on top of this file.
+#
+# Grafana is exposed at grafana.<DBZ_DOMAIN> and reuses the same wildcard TLS
+# secret name as the other homelab ingresses (see deploy/values/zot/homelab.yaml.gotmpl
+# and certs/wildcard-example-com.yaml).
+
+grafana:
+  adminUser: admin
+  adminPassword: grafanapassword
+  persistence:
+    enabled: true
+    storageClassName: local-path   # k3s default
+    size: 5Gi
+  ingress:
+    enabled: true
+    ingressClassName: traefik
+    hosts:
+      - grafana.{{ requiredEnv "DBZ_DOMAIN" }}
+    tls:
+      - secretName: wildcard-{{ requiredEnv "DBZ_DOMAIN" | replace "." "-" }}-tls
+        hosts:
+          - grafana.{{ requiredEnv "DBZ_DOMAIN" }}
+
+prometheus:
+  prometheusSpec:
+    # Discover ServiceMonitors / PodMonitors / rules from ALL namespaces regardless
+    # of the helm-release label, so the DMP ServiceMonitor (namespace dmp) is scraped
+    # even though it is created by a different chart.
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+    probeSelectorNilUsesHelmValues: false
+    retention: 15d
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: local-path
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 20Gi
+
+alertmanager:
+  alertmanagerSpec:
+    storage:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: local-path
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 2Gi
