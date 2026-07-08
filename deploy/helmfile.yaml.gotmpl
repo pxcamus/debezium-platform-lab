@@ -187,7 +187,7 @@ releases:
     labels:
       app: mssql
       component: mssql
-      infra: "true"
+      infra: "false"
     values:
       - values/mssql/{{ env "DBZ_ENV" | default "local" }}.yaml
 

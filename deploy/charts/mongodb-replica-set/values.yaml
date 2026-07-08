@@ -1,3 +1,6 @@
+storage:
+  storageClass: local-path
+
 mongodb:
   users:
     admin:

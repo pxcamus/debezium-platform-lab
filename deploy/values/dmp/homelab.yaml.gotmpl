@@ -12,9 +12,9 @@ ingress:
 debezium-operator:
   enabled: false
 conductor:
-  imagePullPolicy: IfNotPresent
+  imagePullPolicy: Always
 stage:
-  imagePullPolicy: IfNotPresent
+  imagePullPolicy: Always
 monitoring:
   otel:
     enabled: true
