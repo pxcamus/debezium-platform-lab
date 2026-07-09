@@ -65,16 +65,6 @@ func (Helm) All() error {
 		return err
 	}
 
-	// kind load
-	if err := run("kind", "load", "docker-image", "cdc-dashboard:latest", "--name", "dmp"); err != nil {
-		return err
-	}
-
-	// deploy cdc-dashboard
-	if err := run("helmfile", "--file", "deploy/helmfile.yaml.gotmpl", "--selector", "app=cdc-dashboard", "apply"); err != nil {
-		return err
-	}
-
 	if err := run("helmfile", "--file", "deploy/helmfile.yaml.gotmpl", "--selector", "app=debezium-operator", "apply"); err != nil {
 		return err
 	}
@@ -116,12 +106,23 @@ func (Helm) Platform() error {
 	return run("helmfile", "--file", "deploy/helmfile.yaml.gotmpl", "--selector", "app=debezium-platform", "apply")
 }
 
+// Infra applies the full infra=true batch (Kafka, databases, and their
+// operators, plus homelab monitoring/registry/cert-manager) in one helmfile
+// invocation, ordered by the releases' `needs` dependencies.
+//
+// --skip-diff-on-install: on a fresh cluster the helm-diff preview can't resolve
+// CRDs that the operators install (Kafka/KafkaNodePool, CNPG Cluster,
+// MongoDBCommunity, Prometheus/Alertmanager/OpenTelemetryCollector), which aborts
+// the apply with "no matches for kind ... ensure CRDs are installed first".
+// Skipping the diff for not-yet-installed releases lets Helm install the operators
+// (and their CRDs) before the resources that use them, so this target is safe to
+// run standalone.
 func (Helm) Infra() error {
 	if err := automation.LoadEnv(); err != nil {
 		return err
 	}
 
-	return run("helmfile", "--file", "deploy/helmfile.yaml.gotmpl", "--selector", "infra=true", "apply")
+	return run("helmfile", "--file", "deploy/helmfile.yaml.gotmpl", "--selector", "infra=true", "apply", "--skip-diff-on-install")
 }
 
 // Monitoring applies the monitoring foundation (kube-prometheus-stack, then the

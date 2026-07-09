@@ -102,7 +102,7 @@ spec:
 
   storage:
     size: 10Gi
-    storageClass: standard
+    storageClass: {{ .Values.storage.storageClass | default "local-path" }}
 
   monitoring:
     enablePodMonitor: false

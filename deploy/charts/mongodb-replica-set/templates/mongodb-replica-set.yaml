@@ -94,7 +94,7 @@ spec:
         - metadata:
             name: data-volume
           spec:
-            storageClassName: standard
+            storageClassName: {{ .Values.storage.storageClass | default "local-path" }}
             accessModes:
               - ReadWriteOnce
             resources:
@@ -103,7 +103,7 @@ spec:
         - metadata:
             name: logs-volume
           spec:
-            storageClassName: standard
+            storageClassName: {{ .Values.storage.storageClass | default "local-path" }}
             accessModes:
               - ReadWriteOnce
             resources:
