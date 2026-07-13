@@ -86,7 +86,7 @@ func (k *K3s) Install(ctx context.Context) error {
 	//)
 	return k.Runner.Run(
 		ctx,
-		`curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="server --tls-san %s" sh -`, k.Host,
+		fmt.Sprintf(`curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="server --tls-san %s" sh -`, k.Host),
 	)
 }
 

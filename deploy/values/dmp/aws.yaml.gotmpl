@@ -17,4 +17,19 @@ domain:
 database:
   enabled: true
 debezium-operator:
-  enabled: false
+  enabled: true
+monitoring:
+  otel:
+    enabled: true
+    collector:
+      # Base distro includes the Prometheus exporter (the operator's default
+      # otelcol-k8s distro does not). Tag tracks the OTel Operator app version
+      # (OTEL_OPERATOR_VERSION 0.118.0 -> app 0.153.0).
+      image: ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector:0.153.0
+  prometheus:
+    # Conductor queries this Prometheus HTTP API to render its in-UI panels.
+    url: "http://kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090"
+    serviceMonitor:
+      enabled: true
+      labels:
+        release: kube-prometheus-stack

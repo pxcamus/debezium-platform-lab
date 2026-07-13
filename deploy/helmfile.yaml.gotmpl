@@ -228,7 +228,7 @@ releases:
     needs:
       - databases/postgresql-cluster
 
-  # Monitoring foundation (homelab only). Both are labelled infra:true so the
+  # Monitoring foundation (homelab + aws). Both are labelled infra:true so the
   # `--selector infra=true` batch in `mage helm:all` installs them (and their
   # ServiceMonitor / OpenTelemetryCollector CRDs) BEFORE debezium-platform.
   #
@@ -241,29 +241,34 @@ releases:
     createNamespace: true
     chart: prometheus-community/kube-prometheus-stack
     version: '{{ requiredEnv "KUBE_PROMETHEUS_STACK_VERSION" }}'
-    installed: {{ eq (env "DBZ_ENV" | default "local") "homelab" }}
+    installed: {{ or (eq (env "DBZ_ENV" | default "local") "homelab") (eq (env "DBZ_ENV" | default "local") "aws") }}
     timeout: 600
     labels:
       app: kube-prometheus-stack
       component: monitoring
       infra: "true"
     values:
-      - values/kube-prometheus-stack/homelab.yaml.gotmpl
+      - values/kube-prometheus-stack/{{ env "DBZ_ENV" | default "local" }}.yaml.gotmpl
 
   # OpenTelemetry Operator — reconciles the OpenTelemetryCollector CR that the
   # debezium-platform chart creates when monitoring.otel.enabled=true. In homelab
   # cert-manager is present, so the operator's admission-webhook certs work with
-  # no extra config.
+  # no extra config. On aws there is no cert-manager, so values/opentelemetry-operator/aws.yaml
+  # switches the webhook to a self-signed auto-generated cert instead.
   - name: opentelemetry-operator
     namespace: monitoring
     createNamespace: true
     chart: open-telemetry/opentelemetry-operator
     version: '{{ requiredEnv "OTEL_OPERATOR_VERSION" }}'
-    installed: {{ eq (env "DBZ_ENV" | default "local") "homelab" }}
+    installed: {{ or (eq (env "DBZ_ENV" | default "local") "homelab") (eq (env "DBZ_ENV" | default "local") "aws") }}
     labels:
       app: opentelemetry-operator
       component: monitoring
       infra: "true"
+{{- if eq (env "DBZ_ENV" | default "local") "aws" }}
+    values:
+      - values/opentelemetry-operator/aws.yaml
+{{- end }}
 
   - name: debezium-operator
     namespace: '{{ env "DBZ_NAMESPACE" | default "dmp" }}'
