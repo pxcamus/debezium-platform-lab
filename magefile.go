@@ -468,6 +468,31 @@ func run(command string, args ...string) error {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
+	cmd.Env = commandEnv()
 
 	return cmd.Run()
+}
+
+// commandEnv builds the environment for helmfile/kubectl child processes. When
+// CLUSTER_TYPE=k3s it pins KUBECONFIG to K3S_LOCAL_KUBECONFIG so every helm target
+// always acts on the intended remote k3s cluster, rather than whatever context
+// happens to be current in the default ~/.kube/config (which can silently retarget
+// the wrong cluster). Any inherited KUBECONFIG is stripped so ours always wins.
+func commandEnv() []string {
+	env := os.Environ()
+
+	if !strings.EqualFold(automation.Env("CLUSTER_TYPE", "kind"), "k3s") {
+		return env
+	}
+
+	kubeconfig := automation.ExpandPath(automation.Env("K3S_LOCAL_KUBECONFIG", "~/.kube/k3s-aws.yaml"))
+
+	result := make([]string, 0, len(env)+1)
+	for _, kv := range env {
+		if !strings.HasPrefix(kv, "KUBECONFIG=") {
+			result = append(result, kv)
+		}
+	}
+
+	return append(result, "KUBECONFIG="+kubeconfig)
 }

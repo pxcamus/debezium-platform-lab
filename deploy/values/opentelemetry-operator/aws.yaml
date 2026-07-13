@@ -1,0 +1,11 @@
+# OpenTelemetry Operator — aws (no cert-manager present)
+#
+# The operator's mutating/validating admission webhook needs TLS certs. The chart
+# defaults to cert-manager (admissionWebhooks.certManager.enabled=true), which only
+# exists in homelab. On aws we let the chart's Helm hook generate a self-signed cert
+# instead, so the operator becomes Ready without cert-manager.
+admissionWebhooks:
+  certManager:
+    enabled: false
+  autoGenerateCert:
+    enabled: true
