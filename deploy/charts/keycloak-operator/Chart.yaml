@@ -1,0 +1,10 @@
+apiVersion: v2
+name: keycloak-operator
+description: >-
+  Official Keycloak Operator, vendored from keycloak/keycloak-k8s-resources.
+  The operator Deployment + RBAC live in templates/; the Keycloak and
+  KeycloakRealmImport CRDs live in crds/. Regenerate both with
+  scripts/vendor-keycloak-operator.sh after bumping KEYCLOAK_OPERATOR_VERSION.
+type: application
+version: 0.1.0
+appVersion: "26.7.0"

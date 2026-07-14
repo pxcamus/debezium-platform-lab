@@ -4,7 +4,7 @@ Go-based automation for deploying and managing the [Debezium Platform](https://d
 
 It provisions a full change-data-capture (CDC) stack — Kafka (Strimzi), PostgreSQL (CloudNativePG), MongoDB, SQL Server, the Debezium Operator and the Debezium Platform — seeds demo databases, and drives the Debezium Platform HTTP API to create connections, sources, destinations and pipelines idempotently.
 
-The primary task runner is [**mage**](https://magefile.org/) (Go); Helm releases are orchestrated with [**helmfile**](https://helmfile.readthedocs.io/).
+The task runner is [**mage**](https://magefile.org/) (Go); Helm releases are orchestrated with [**helmfile**](https://helmfile.readthedocs.io/).
 
 > **Status:** internal automation shared for reference. Defaults target a local [Kind](https://kind.sigs.k8s.io/) cluster. Passwords in the Helm charts and `.env.example` are non-secret demo values.
 
@@ -15,13 +15,13 @@ The primary task runner is [**mage**](https://magefile.org/) (Go); Helm releases
 | Tool | Purpose |
 |---|---|
 | [Go](https://go.dev/) 1.26+ | build/run mage targets |
-| [mage](https://magefile.org/#installation) | primary task runner |
+| [mage](https://magefile.org/#installation) | task runner |
 | [helmfile](https://helmfile.readthedocs.io/en/latest/#installation) + [helm](https://helm.sh/) | chart orchestration (helm-diff plugin recommended) |
 | [kind](https://kind.sigs.k8s.io/) | local Kubernetes cluster |
 | [kubectl](https://kubernetes.io/docs/tasks/tools/) | cluster access |
 | [Docker](https://www.docker.com/) | container runtime for Kind |
 
-Optional: [Task](https://taskfile.dev/) (legacy Kind workflow), [kubeconform](https://github.com/yannh/kubeconform) (used by CI/helm validation).
+Optional: [kubeconform](https://github.com/yannh/kubeconform) (used by CI/helm validation).
 
 ---
 
@@ -56,7 +56,7 @@ mage -l
 
 ## Configuration
 
-**All configuration is via environment variables**, loaded from `.env` (git-ignored). Start from [`.env.example`](.env.example), which documents every variable. The most important ones:
+**All configuration is via environment variables**, loaded from two layered files: `.env` (git-ignored — secrets and host-specific overrides) takes precedence, and [`deploy/environment/versions.env`](deploy/environment/versions.env) (shared, non-sensitive version pins) is loaded as a fallback. Both mage and `scripts/validate-helm.sh` resolve this way, so **version pins live in `versions.env` only** — `.env` doesn't duplicate them and a CI checkout can run from `versions.env` alone. Start from [`.env.example`](.env.example), which documents every variable. The most important ones:
 
 | Variable | Purpose | Default |
 |---|---|---|
@@ -125,7 +125,6 @@ Runs `helm lint` / `helm template` per chart and `helmfile lint` / `template` pi
 ```
 main.go                  # Standalone entry point (MongoDB setup)
 magefile.go              # Primary task runner (mage targets)
-Taskfile.yaml            # Secondary task runner (legacy Kind workflow)
 
 ko/                      # Core Go library (module: dbz-mage, imports dbz-mage/ko/...)
 ├── cluster/             # K8s cluster lifecycle (Kind, K3s)
@@ -177,7 +176,6 @@ The webhook release is gated on `DBZ_ENV=homelab`, so it is not installed for `l
 
 - **Module name:** the Go module is `dbz-mage` (unchanged by the repo name). Imports use `dbz-mage/ko/...`.
 - **No `go build` target:** `magefile.go` uses the `//go:build mage` tag and only compiles via `mage`. `main.go` is a separate standalone entry point.
-- **Two task runners:** `magefile.go` is primary and current; `Taskfile.yaml` is a legacy Kind workflow and some of its paths predate the `deploy/` reorg.
 - **DMP base URL:** `ko/dmp/http_client.go` derives `http://dmp.${DBZ_DOMAIN}` (or `DMP_BASE_URL` if set); ingress hosts across the platform are `<component>.${DBZ_DOMAIN}`, set via the `DBZ_DOMAIN` base zone.
 - **Idempotent DMP resources:** the resolver does find-by-name before create, so re-running a scenario reuses existing resources.
 - **Commented-out releases:** `helmfile.yaml.gotmpl` and `magefile.go` contain disabled blocks for optional/retired components (Apicurio, CDC dashboard, Kafka Connect). Don't enable without checking the dependency chain.

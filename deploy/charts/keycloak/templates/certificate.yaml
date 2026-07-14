@@ -1,0 +1,19 @@
+# Option A (one Certificate per namespace): materialize the wildcard TLS secret
+# in the identity namespace so Keycloak's Ingress stands on its own cert instead
+# of implicitly riding on another namespace's copy in Traefik's shared SNI store.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: wildcard-{{ .Values.domain | replace "." "-" }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: keycloak
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  dnsNames:
+    - '*.{{ .Values.domain }}'
+  issuerRef:
+    name: {{ .Values.tls.certIssuer }}
+    kind: ClusterIssuer
+  secretName: wildcard-{{ .Values.domain | replace "." "-" }}-tls

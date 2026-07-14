@@ -1,0 +1,11 @@
+apiVersion: v2
+name: keycloak
+description: >-
+  Keycloak instance (managed by the Keycloak Operator) for the homelab: a
+  Keycloak CR pointed at the dedicated keycloak-db CNPG cluster, a Traefik
+  Ingress with edge TLS from the wildcard cert, an identity-namespace
+  Certificate, and a starter dmp realm imported via KeycloakRealmImport.
+  Requires the keycloak-operator and keycloak-db releases.
+type: application
+version: 0.1.0
+appVersion: "26.7.0"

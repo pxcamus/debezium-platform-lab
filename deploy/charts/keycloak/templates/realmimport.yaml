@@ -1,0 +1,21 @@
+{{- if .Values.realmImport.enabled }}
+# Declarative starter realm. The operator runs a one-shot import Job on create —
+# it does NOT continuously reconcile later console edits. Workflow: define here →
+# apply → import → experiment in the console → export → commit. Expand realm:
+# with clients / groups / roles as you build out the fleet's SSO.
+apiVersion: k8s.keycloak.org/v2beta1
+kind: KeycloakRealmImport
+metadata:
+  name: {{ .Values.realmImport.realm }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: keycloak
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  keycloakCRName: keycloak
+  realm:
+    realm: {{ .Values.realmImport.realm }}
+    displayName: Debezium Platform ({{ .Values.realmImport.realm }})
+    enabled: true
+{{- end }}

@@ -106,6 +106,46 @@ func (Helm) Platform() error {
 	return run("helmfile", "--file", "deploy/helmfile.yaml.gotmpl", "--selector", "app=debezium-platform", "apply")
 }
 
+// KeycloakOperator applies only the Keycloak Operator release (operator + CRDs).
+// Homelab only. Run this first — it installs the Keycloak/KeycloakRealmImport CRDs
+// that the keycloak-db (via CNPG) and keycloak releases depend on.
+func (Helm) KeycloakOperator() error {
+	if err := automation.LoadEnv(); err != nil {
+		return err
+	}
+
+	return run("helmfile", "--file", "deploy/helmfile.yaml.gotmpl", "--selector", "app=keycloak-operator", "apply")
+}
+
+// KeycloakDb applies only the dedicated CNPG Postgres backing Keycloak. Homelab only.
+//
+// --skip-diff-on-install: on a fresh cluster the helm-diff preview can't resolve the
+// CNPG `Cluster` CRD (installed by cnpg-operator), which would abort the apply with
+// "no matches for kind Cluster". Skipping the diff for the not-yet-installed release
+// lets Helm create it once the CRD exists.
+func (Helm) KeycloakDb() error {
+	if err := automation.LoadEnv(); err != nil {
+		return err
+	}
+
+	return run("helmfile", "--file", "deploy/helmfile.yaml.gotmpl", "--selector", "app=keycloak-db", "apply", "--skip-diff-on-install")
+}
+
+// Keycloak applies only the Keycloak instance release (Keycloak CR + Ingress +
+// Certificate + realm import). Homelab only. Needs keycloak-operator (CRDs) and
+// keycloak-db (database) already applied.
+//
+// --skip-diff-on-install: the release creates `Keycloak` and `KeycloakRealmImport`
+// CRs whose CRDs come from keycloak-operator; on a fresh cluster the diff preview
+// can't resolve them, so skip it for the not-yet-installed release.
+func (Helm) Keycloak() error {
+	if err := automation.LoadEnv(); err != nil {
+		return err
+	}
+
+	return run("helmfile", "--file", "deploy/helmfile.yaml.gotmpl", "--selector", "app=keycloak", "apply", "--skip-diff-on-install")
+}
+
 // Infra applies the full infra=true batch (Kafka, databases, and their
 // operators, plus homelab monitoring/registry/cert-manager) in one helmfile
 // invocation, ordered by the releases' `needs` dependencies.

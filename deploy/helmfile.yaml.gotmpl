@@ -270,6 +270,60 @@ releases:
       - values/opentelemetry-operator/aws.yaml
 {{- end }}
 
+  # Identity / SSO (homelab only) — Keycloak via the official Operator, treated
+  # as durable infra (installed once, upgraded in place; not part of the platform
+  # churn). Three releases in the `identity` namespace, chained by needs:
+  #   keycloak-operator  -> official operator + CRDs, vendored by
+  #                         scripts/vendor-keycloak-operator.sh (pinned version).
+  #   keycloak-db        -> a DEDICATED CNPG Postgres, separate from the demo
+  #                         `databases` cluster so a platform rebuild never wipes
+  #                         Keycloak's identity data. Needs cnpg-operator.
+  #   keycloak           -> the Keycloak CR + Traefik Ingress (edge TLS from the
+  #                         wildcard cert) + identity-namespace Certificate + a
+  #                         starter dmp realm. Needs the operator (CRDs) and DB.
+  # First install: the operator CRDs are large; if Helm hits the client-side
+  # "metadata.annotations: Too long" limit, apply them once with
+  #   kubectl apply --server-side -f deploy/charts/keycloak-operator/crds/
+  - name: keycloak-operator
+    namespace: identity
+    createNamespace: true
+    chart: ./charts/keycloak-operator
+    installed: {{ eq (env "DBZ_ENV" | default "local") "homelab" }}
+    timeout: 300
+    labels:
+      app: keycloak-operator
+      component: identity
+      infra: "true"
+
+  - name: keycloak-db
+    namespace: identity
+    createNamespace: true
+    chart: ./charts/keycloak-db
+    installed: {{ eq (env "DBZ_ENV" | default "local") "homelab" }}
+    timeout: 300
+    labels:
+      app: keycloak-db
+      component: identity
+      infra: "true"
+    needs:
+      - databases/cnpg-operator
+
+  - name: keycloak
+    namespace: identity
+    createNamespace: true
+    chart: ./charts/keycloak
+    installed: {{ eq (env "DBZ_ENV" | default "local") "homelab" }}
+    timeout: 600
+    labels:
+      app: keycloak
+      component: identity
+      infra: "true"
+    values:
+      - values/keycloak/homelab.yaml.gotmpl
+    needs:
+      - identity/keycloak-operator
+      - identity/keycloak-db
+
   - name: debezium-operator
     namespace: '{{ env "DBZ_NAMESPACE" | default "dmp" }}'
     createNamespace: true

@@ -1,0 +1,26 @@
+# Defaults are overridden per-env by deploy/values/keycloak/homelab.yaml.gotmpl,
+# which injects the real DBZ_DOMAIN. The public host is auth.<domain>; the TLS
+# secret and wildcard Certificate are derived as wildcard-<domain-dashed>-tls.
+domain: platform.debezium.local
+
+instances: 1
+
+# Dedicated CNPG cluster (keycloak-db release). CNPG exposes the primary at
+# <cluster>-rw.<namespace>.svc.cluster.local.
+db:
+  host: keycloak-db-rw.identity.svc.cluster.local
+  port: 5432
+  database: keycloak
+  secretName: keycloak-db-app
+
+tls:
+  # Start on staging to avoid burning Let's Encrypt prod rate limits while
+  # iterating; flip to letsencrypt-prod once the flow is green.
+  certIssuer: letsencrypt-staging
+
+# Starter dmp realm imported declaratively. Toggle off to manage the realm by
+# hand; expand realm: with clients/groups/roles as you learn (it is a full
+# Keycloak RealmRepresentation).
+realmImport:
+  enabled: true
+  realm: dmp

@@ -1,0 +1,15 @@
+# Keycloak — homelab. Rendered by helmfile with the environment loaded, so
+# DBZ_DOMAIN drives the public host (auth.<domain>), the wildcard Certificate,
+# and the Ingress TLS secret. See deploy/charts/keycloak/ for the templates.
+domain: {{ requiredEnv "DBZ_DOMAIN" }}
+
+instances: 1
+
+tls:
+  # letsencrypt-staging while iterating (browser-untrusted but rate-limit-friendly);
+  # switch to letsencrypt-prod once the DNS-01 flow and ingress are confirmed green.
+  certIssuer: letsencrypt-staging
+
+realmImport:
+  enabled: true
+  realm: dmp
