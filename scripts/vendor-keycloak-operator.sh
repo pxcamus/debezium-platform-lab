@@ -54,28 +54,50 @@ echo "    source: ${base}"
 echo "    target: ${chart_dir}"
 mkdir -p "${chart_dir}/crds" "${chart_dir}/templates"
 
-# --- Step 1 & 2: the two CRDs -----------------------------------------------
-# These teach Kubernetes about the `Keycloak` and `KeycloakRealmImport` kinds.
+# --- Step 1: ALL the CRDs (discovered dynamically) --------------------------
+# The operator watches one CRD per controller, and the set GROWS across versions:
+# 26.7.0 ships FOUR (keycloaks, keycloakrealmimports, keycloakoidcclients,
+# keycloaksamlclients). Vendoring only a subset makes the operator crash on
+# startup ("Couldn't start informer for <missing>.k8s.keycloak.org ... Not Found")
+# and the helm --wait rolls the release back. So we discover EVERY CRD file in the
+# pinned kubernetes/ dir via the GitHub contents API and download all of them —
+# no hardcoded list to fall out of date.
+#
 # They go in crds/ (not templates/) because Helm installs crds/ ONCE and never
 # upgrades or deletes them — deleting a CRD would delete every CR (and thus your
-# Keycloak). The tradeoff: after a version bump you may need to apply the new
-# CRDs by hand. They are large (~500 KB each), so use server-side apply to dodge
-# the client-side "metadata.annotations: Too long" limit:
+# Keycloak). The tradeoff: after a version bump you may need to apply new/changed
+# CRDs by hand (the big ones need server-side apply to dodge the client-side
+# "metadata.annotations: Too long" limit):
 #     kubectl apply --server-side -f deploy/charts/keycloak-operator/crds/
-echo "--> [1/3] CRD: Keycloak"
-curl -fsSL "${base}/keycloaks.k8s.keycloak.org-v1.yml" \
-  -o "${chart_dir}/crds/keycloaks.k8s.keycloak.org-v1.yml"
-echo "--> [2/3] CRD: KeycloakRealmImport"
-curl -fsSL "${base}/keycloakrealmimports.k8s.keycloak.org-v1.yml" \
-  -o "${chart_dir}/crds/keycloakrealmimports.k8s.keycloak.org-v1.yml"
+api="https://api.github.com/repos/keycloak/keycloak-k8s-resources/contents/kubernetes?ref=${version}"
+crd_files="$(curl -fsSL "${api}" \
+  | grep '"name"' \
+  | sed -E 's/.*"name" *: *"([^"]+)".*/\1/' \
+  | grep '\.k8s\.keycloak\.org-v1\.yml$')"
 
-# --- Step 3: the operator Deployment + RBAC ---------------------------------
+if [[ -z "${crd_files}" ]]; then
+  echo "ERROR: could not discover any CRD files for ${version} from the GitHub API" >&2
+  echo "       (rate limit? try again, or set GITHUB_TOKEN)" >&2
+  exit 1
+fi
+
+# Drop stale CRDs first so a removed/renamed CRD doesn't linger in the chart.
+rm -f "${chart_dir}/crds/"*.k8s.keycloak.org-v1.yml
+n=0
+while IFS= read -r f; do
+  n=$((n + 1))
+  echo "--> CRD [${n}]: ${f}"
+  curl -fsSL "${base}/${f}" -o "${chart_dir}/crds/${f}"
+done <<< "${crd_files}"
+echo "    (${n} CRD(s) vendored)"
+
+# --- Step 2: the operator Deployment + RBAC ---------------------------------
 # THE ONE EDIT: upstream kubernetes.yml hardcodes `namespace: keycloak` in the
 # ClusterRoleBinding subject (it assumes you install into a `keycloak` namespace).
 # We install into `identity`, so we retarget that single line to the chart's
 # release namespace. Missing this would leave the operator without the RBAC it
 # needs and it would silently fail to reconcile anything.
-echo "--> [3/3] Operator Deployment + RBAC (retargeting ClusterRoleBinding namespace -> release namespace)"
+echo "--> Operator Deployment + RBAC (retargeting ClusterRoleBinding namespace -> release namespace)"
 tmp="$(mktemp)"
 curl -fsSL "${base}/kubernetes.yml" -o "${tmp}"
 sed 's/^\( *namespace: \)keycloak$/\1{{ .Release.Namespace }}/' "${tmp}" \
