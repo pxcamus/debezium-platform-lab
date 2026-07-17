@@ -1,0 +1,28 @@
+# Traefik Ingress fronting the oidc-demo Service. Edge TLS from the wildcard secret
+# the Certificate materializes in this namespace (same pattern as the keycloak chart).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ .Release.Name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: oidc-demo
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: oidc-demo.{{ .Values.domain }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .Release.Name }}
+                port:
+                  number: {{ .Values.service.port }}
+  tls:
+    - hosts:
+        - oidc-demo.{{ .Values.domain }}
+      secretName: wildcard-{{ .Values.domain | replace "." "-" }}-tls

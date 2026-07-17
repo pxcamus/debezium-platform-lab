@@ -1,0 +1,10 @@
+apiVersion: v2
+name: oidc-demo
+description: >-
+  Phase 2 SSO learning app: a tiny Go service protected by OIDC against the
+  homelab Keycloak (realm dmp). Deployment + Service + Traefik Ingress (edge TLS
+  from the wildcard cert) + a per-namespace Certificate. The app image is built
+  from the separate oidc-demo repo and pushed to the homelab registry (zot).
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

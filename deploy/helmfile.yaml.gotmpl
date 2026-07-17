@@ -314,6 +314,12 @@ releases:
     chart: ./charts/keycloak
     installed: {{ eq (env "DBZ_ENV" | default "local") "homelab" }}
     timeout: 600
+    # Do NOT roll back on failure: this release includes a cert-manager Certificate,
+    # and helm --wait blocks on it. If issuance lags (DNS-01) past the timeout, the
+    # default rollback-on-failure would UNINSTALL an otherwise-healthy Keycloak
+    # (Keycloak CR Ready, realm imported) just because the cert wasn't ready yet.
+    # atomic:false leaves the resources in place so a slow cert can catch up.
+    atomic: false
     labels:
       app: keycloak
       component: identity
@@ -323,6 +329,27 @@ releases:
     needs:
       - identity/keycloak-operator
       - identity/keycloak-db
+
+  # SSO Phase 2 learning app (homelab only) — a tiny Go service protected by OIDC
+  # against the dmp realm, at oidc-demo.${DBZ_DOMAIN}. Image built from the separate
+  # oidc-demo repo and pushed to zot. No `needs:` on keycloak: the app reaches
+  # Keycloak over the public URL (auth.${DBZ_DOMAIN}), not an in-cluster Service, so
+  # there is no hard ordering dependency. Like `keycloak` it bundles a cert-manager
+  # Certificate and inherits wait:true, so atomic:false — a lagging DNS-01 issuance
+  # must not roll back an otherwise-healthy app (see keycloak stanza / Phase 1 Issue 4).
+  - name: oidc-demo
+    namespace: tools
+    createNamespace: true
+    chart: ./charts/oidc-demo
+    installed: {{ eq (env "DBZ_ENV" | default "local") "homelab" }}
+    timeout: 300
+    atomic: false
+    labels:
+      app: oidc-demo
+      component: identity
+      infra: "false"
+    values:
+      - values/oidc-demo/homelab.yaml.gotmpl
 
   - name: debezium-operator
     namespace: '{{ env "DBZ_NAMESPACE" | default "dmp" }}'

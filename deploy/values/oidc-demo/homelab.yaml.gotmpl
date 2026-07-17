@@ -1,0 +1,28 @@
+# oidc-demo — homelab. Rendered by helmfile with the environment loaded, so
+# DBZ_DOMAIN drives the public host (oidc-demo.<domain>), the OIDC issuer/redirect
+# (derived in the chart from domain), the wildcard Certificate, and the Ingress TLS
+# secret. See deploy/charts/oidc-demo/ for the templates.
+domain: {{ requiredEnv "DBZ_DOMAIN" }}
+
+image:
+  # Built from the separate oidc-demo repo (linux/arm64) and pushed to zot.
+  repository: registry.{{ requiredEnv "DBZ_DOMAIN" }}/oidc-demo
+  tag: "0.1.0"
+  pullPolicy: IfNotPresent
+
+# zot is authenticated — create the pull secret by hand (git-ignored):
+#   kubectl -n tools create secret docker-registry zot-pull \
+#     --docker-server=registry.{{ requiredEnv "DBZ_DOMAIN" }} \
+#     --docker-username=admin --docker-password='<zot password>'
+imagePullSecrets:
+  - name: zot-pull
+
+# Client + session secrets come from a hand-created Secret (git-ignored):
+#   kubectl -n tools create secret generic oidc-demo-secret \
+#     --from-literal=client-secret='<keycloak client secret>' \
+#     --from-literal=session-secret="$(openssl rand -base64 48)"
+secret:
+  name: oidc-demo-secret
+
+tls:
+  certIssuer: letsencrypt-prod

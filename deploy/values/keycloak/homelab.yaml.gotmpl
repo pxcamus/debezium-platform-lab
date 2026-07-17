@@ -6,9 +6,12 @@ domain: {{ requiredEnv "DBZ_DOMAIN" }}
 instances: 1
 
 tls:
-  # letsencrypt-staging while iterating (browser-untrusted but rate-limit-friendly);
-  # switch to letsencrypt-prod once the DNS-01 flow and ingress are confirmed green.
-  certIssuer: letsencrypt-staging
+  # erebor only has the letsencrypt-prod ClusterIssuer (it was cut over to prod;
+  # no letsencrypt-staging exists — a staging issuerRef leaves the Certificate
+  # unissued forever and blocks helm --wait). prod is the proven Gandi DNS-01 flow
+  # already issuing *.erebor.1int.io in the registry namespace. Duplicate-cert
+  # rate limit (5/week for the identical wildcard SAN) is fine at 2 namespaces.
+  certIssuer: letsencrypt-prod
 
 realmImport:
   enabled: true
