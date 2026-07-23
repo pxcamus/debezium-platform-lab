@@ -32,11 +32,16 @@ pvc:
   storage: 20Gi
   storageClassName: local-path   # k3s default
 
-# Mount the htpasswd secret at /secret/htpasswd (override the hash in a local overlay)
+# Mount the htpasswd secret at /secret/htpasswd (override the hashes in a local overlay).
+# The overlay should carry TWO users — no anonymous access:
+#   admin  : full read/write (pushes)      -> htpasswd -bBn admin  'push-password'
+#   puller : read-only (in-cluster pulls)   -> htpasswd -bBn puller 'pull-password'
+# accessControl below restricts `puller` to read on debezium/**; `admin` keeps write.
 mountSecret: true
 secretFiles:
   htpasswd: |-
     admin:$2y$05$REPLACE_WITH_OUTPUT_FROM_htpasswd_-bBn
+    puller:$2y$05$REPLACE_WITH_OUTPUT_FROM_htpasswd_-bBn
 
 # Mount an explicit zot config at /etc/zot/config.json enabling htpasswd auth
 mountConfig: true
@@ -59,9 +64,9 @@ configFiles:
         "accessControl": {
           "repositories": {
             "debezium/**": {
-              "anonymousPolicy": ["read"],
               "policies": [
-                { "users": ["admin"], "actions": ["read", "create", "update", "delete"] }
+                { "users": ["admin"], "actions": ["read", "create", "update", "delete"] },
+                { "users": ["puller"], "actions": ["read"] }
               ]
             }
           }
