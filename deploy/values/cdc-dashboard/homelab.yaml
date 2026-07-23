@@ -1,0 +1,16 @@
+# cdc-dashboard — homelab (erebor k3s, arm64).
+#
+# Image is pulled from the homelab Zot registry under debezium/** (anonymous read;
+# the chart has no imagePullSecrets support). Push it with:
+#   docker tag cdc-dashboard:latest-2 registry.erebor.1int.io/debezium/cdc-dashboard:latest-2
+#   docker push registry.erebor.1int.io/debezium/cdc-dashboard:latest-2
+# See docs/debezium/zot-registry/cdc-dashboard.md in the oneint-docs repo.
+image:
+  repository: registry.erebor.1int.io/debezium/cdc-dashboard
+  tag: latest-2
+  pullPolicy: IfNotPresent
+
+# The MongoDBCommunity replica set on erebor is named "mongodb" (not the chart-default
+# rs0). Postgres uses the chart-default postgresUri (postgresql-rw / app_owner).
+secret:
+  mongodbUri: "mongodb://app_owner:app_owner@mongodb-0.mongodb-svc.databases.svc.cluster.local:27017,mongodb-1.mongodb-svc.databases.svc.cluster.local:27017,mongodb-2.mongodb-svc.databases.svc.cluster.local:27017/ecommerce?authSource=admin&replicaSet=mongodb"

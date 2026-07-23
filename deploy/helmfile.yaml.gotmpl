@@ -211,7 +211,7 @@ releases:
       component: cdc-dashboard
       infra: "false"
     values:
-      - values/cdc-dashboard/local.yaml
+      - values/cdc-dashboard/{{ env "DBZ_ENV" | default "local" }}.yaml
     needs:
       - databases/mongodb-replica-set
 
