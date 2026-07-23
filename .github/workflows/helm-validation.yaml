@@ -40,7 +40,6 @@ jobs:
         with:
           helmfile-version: latest
           helm-version: latest
-          helm-plugins: https://github.com/helm-unittest/helm-unittest.git
           helmfile-args: ''
 
       - name: Install kubeconform
