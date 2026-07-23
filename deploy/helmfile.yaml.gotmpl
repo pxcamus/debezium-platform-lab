@@ -359,6 +359,16 @@ releases:
     labels:
       app: debezium-operator
       component: operator
+    # The operator image is pinned independently of the chart version (DBZ_VERSION).
+    # The platform (conductor/stage) only publishes arm64 on `nightly`, so on the
+    # erebor arm64 homelab we must run nightly conductor/stage — and the operator +
+    # its DebeziumServer CRD must match that nightly line, or the operator fails to
+    # deserialize the CRs the nightly conductor emits (e.g. runtime.metrics.otel
+    # metricExportIntervalMs, added after 3.6.0). Vendor the matching nightly CRD via
+    # scripts (see docs). Default nightly; override with DBZ_OPERATOR_TAG.
+    set:
+      - name: image
+        value: quay.io/debezium/operator:{{ env "DBZ_OPERATOR_TAG" | default "nightly" }}
 
   - name: debezium-platform
     namespace: '{{ env "DBZ_NAMESPACE" | default "dmp" }}'
