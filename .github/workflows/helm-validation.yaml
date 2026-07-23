@@ -31,6 +31,8 @@ jobs:
 
       - name: Install Helm
         uses: azure/setup-helm@v4
+        with:
+          version: v4.2.3
 
       - name: Install helm-unittest plugin
         run: helm plugin install https://github.com/helm-unittest/helm-unittest.git --verify=false
@@ -38,8 +40,8 @@ jobs:
       - name: Install Helmfile
         uses: helmfile/helmfile-action@v2
         with:
-          helmfile-version: latest
-          helm-version: latest
+          helmfile-version: v1.7.1
+          helm-version: v4.2.3
           helmfile-args: ''
 
       - name: Install kubeconform
