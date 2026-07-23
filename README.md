@@ -1,12 +1,12 @@
 # debezium-platform-lab
 
-Go-based automation for deploying and managing the [Debezium Platform](https://debezium.io/documentation/reference/stable/operations/debezium-platform.html) on Kubernetes.
+Reproducible, environment-agnostic automation for running the [Debezium Platform](https://debezium.io/documentation/reference/stable/operations/debezium-platform.html) on Kubernetes — the same [**mage**](https://magefile.org/) targets and [**helmfile**](https://helmfile.readthedocs.io/) releases take you from a local [Kind](https://kind.sigs.k8s.io/) cluster to AWS or a self-hosted k3s box.
 
-It provisions a full change-data-capture (CDC) stack — Kafka (Strimzi), PostgreSQL (CloudNativePG), MongoDB, SQL Server, the Debezium Operator and the Debezium Platform — seeds demo databases, and drives the Debezium Platform HTTP API to create connections, sources, destinations and pipelines idempotently.
+[![Helm validation](https://github.com/pxcamus/debezium-platform-lab/actions/workflows/helm-validation.yaml/badge.svg)](https://github.com/pxcamus/debezium-platform-lab/actions/workflows/helm-validation.yaml)
 
-The primary task runner is [**mage**](https://magefile.org/) (Go); Helm releases are orchestrated with [**helmfile**](https://helmfile.readthedocs.io/).
+It provisions a change-data-capture (CDC) stack — Kafka (Strimzi), PostgreSQL (CloudNativePG), MongoDB, optionally SQL Server, the Debezium Operator and the Debezium Platform — seeds demo databases, and drives the Debezium Platform HTTP API to create connections, sources, destinations and pipelines idempotently.
 
-> **Status:** internal automation shared for reference. Defaults target a local [Kind](https://kind.sigs.k8s.io/) cluster. Passwords in the Helm charts and `.env.example` are non-secret demo values.
+Defaults target a local Kind cluster. Passwords in the Helm charts and `.env.example` are non-secret demo values.
 
 ---
 
@@ -21,7 +21,7 @@ The primary task runner is [**mage**](https://magefile.org/) (Go); Helm releases
 | [kubectl](https://kubernetes.io/docs/tasks/tools/) | cluster access |
 | [Docker](https://www.docker.com/) | container runtime for Kind |
 
-Optional: [Task](https://taskfile.dev/) (legacy Kind workflow), [kubeconform](https://github.com/yannh/kubeconform) (used by CI/helm validation).
+Optional: [kubeconform](https://github.com/yannh/kubeconform) (used by CI/helm validation).
 
 ---
 
@@ -35,7 +35,7 @@ cp .env.example .env
 # 2. Create the local cluster
 kind create cluster --name dmp --config deploy/clusters/kind/kind-ingress.yaml
 
-# 3. Deploy the full stack (infra → operator → platform), ordered by dependency
+# 3. Deploy the stack (infra → operator → platform), ordered by dependency
 mage helm:all
 
 # 4. Seed the demo databases
@@ -51,6 +51,14 @@ List every available target with:
 ```bash
 mage -l
 ```
+
+---
+
+## Known gaps
+
+- **Only the MongoDB replica-set scenario (`scenario:mongodbRs`) is wired up today**, so `scenario:all` currently runs just that one. The `postgres-basic` and `sqlserver-basic` directories under `ko/scenarios/` contain payloads but are not yet exposed as targets.
+- **SQL Server requires amd64.** Microsoft ships no arm64 SQL Server image (and Azure SQL Edge, the historical arm64 stand-in, was retired 2025-09-30). The `mssql` release is *not* part of `mage helm:all` — it is applied explicitly (`helmfile --file deploy/helmfile.yaml.gotmpl --selector app=mssql apply`) — so this only affects SQL Server work. Use an amd64 cluster (`CLUSTER_TYPE=k3s` on a cloud box) for SQL Server work.
+- **Debezium Platform release images are amd64-only** (`platform-conductor` / `platform-stage` version tags, checked 2026-07); only the `nightly` tag is multi-arch. `deploy/environment/versions.env` pins `nightly` for this reason. Everything else on the default path — Strimzi operator and Kafka, MongoDB operator/server, CloudNativePG and PostgreSQL, ingress-nginx, the Debezium Operator — publishes amd64+arm64.
 
 ---
 
@@ -99,8 +107,6 @@ mage scenario:mongodbRs   # MongoDB replica-set → Kafka
 mage scenario:all         # every wired scenario
 ```
 
-> **Note:** only the MongoDB replica-set scenario (`scenario:mongodbRs`) is wired up today, so `scenario:all` currently runs just that one. The `postgres-basic` and `sqlserver-basic` directories under `ko/scenarios/` contain payloads but are not yet exposed as targets.
-
 Helm releases are selectable by label directly, too:
 
 ```bash
@@ -125,7 +131,6 @@ Runs `helm lint` / `helm template` per chart and `helmfile lint` / `template` pi
 ```
 main.go                  # Standalone entry point (MongoDB setup)
 magefile.go              # Primary task runner (mage targets)
-Taskfile.yaml            # Secondary task runner (legacy Kind workflow)
 
 ko/                      # Core Go library (module: dbz-mage, imports dbz-mage/ko/...)
 ├── cluster/             # K8s cluster lifecycle (Kind, K3s)
@@ -149,7 +154,7 @@ certs/                   # Optional TLS (see below)
 scripts/validate-helm.sh # Offline chart validation
 ```
 
-`collections/` (Posting HTTP collections for the DMP API) is auxiliary/reference material. `examples/`, `docs/`, `thorin/` are external symlinks and are git-ignored.
+`collections/` (Posting HTTP collections for the DMP API) is auxiliary/reference material.
 
 ---
 
@@ -177,7 +182,6 @@ The webhook release is gated on `DBZ_ENV=homelab`, so it is not installed for `l
 
 - **Module name:** the Go module is `dbz-mage` (unchanged by the repo name). Imports use `dbz-mage/ko/...`.
 - **No `go build` target:** `magefile.go` uses the `//go:build mage` tag and only compiles via `mage`. `main.go` is a separate standalone entry point.
-- **Two task runners:** `magefile.go` is primary and current; `Taskfile.yaml` is a legacy Kind workflow and some of its paths predate the `deploy/` reorg.
 - **DMP base URL:** `ko/dmp/http_client.go` derives `http://dmp.${DBZ_DOMAIN}` (or `DMP_BASE_URL` if set); ingress hosts across the platform are `<component>.${DBZ_DOMAIN}`, set via the `DBZ_DOMAIN` base zone.
 - **Idempotent DMP resources:** the resolver does find-by-name before create, so re-running a scenario reuses existing resources.
 - **Commented-out releases:** `helmfile.yaml.gotmpl` and `magefile.go` contain disabled blocks for optional/retired components (Apicurio, CDC dashboard, Kafka Connect). Don't enable without checking the dependency chain.
