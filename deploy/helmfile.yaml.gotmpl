@@ -34,6 +34,9 @@ repositories:
   - name: open-telemetry
     url: https://open-telemetry.github.io/opentelemetry-helm-charts
 
+  - name: oauth2-proxy
+    url: https://oauth2-proxy.github.io/manifests
+
 releases:
   - name: ingress-nginx
     namespace: ingress-nginx
@@ -211,7 +214,7 @@ releases:
       component: cdc-dashboard
       infra: "false"
     values:
-      - values/cdc-dashboard/local.yaml
+      - values/cdc-dashboard/{{ env "DBZ_ENV" | default "local" }}.yaml
     needs:
       - databases/mongodb-replica-set
 
@@ -270,6 +273,110 @@ releases:
       - values/opentelemetry-operator/aws.yaml
 {{- end }}
 
+  # Identity / SSO (homelab only) — Keycloak via the official Operator, treated
+  # as durable infra (installed once, upgraded in place; not part of the platform
+  # churn). Three releases in the `identity` namespace, chained by needs:
+  #   keycloak-operator  -> official operator + CRDs, vendored by
+  #                         scripts/vendor-keycloak-operator.sh (pinned version).
+  #   keycloak-db        -> a DEDICATED CNPG Postgres, separate from the demo
+  #                         `databases` cluster so a platform rebuild never wipes
+  #                         Keycloak's identity data. Needs cnpg-operator.
+  #   keycloak           -> the Keycloak CR + Traefik Ingress (edge TLS from the
+  #                         wildcard cert) + identity-namespace Certificate + a
+  #                         starter dmp realm. Needs the operator (CRDs) and DB.
+  # First install: the operator CRDs are large; if Helm hits the client-side
+  # "metadata.annotations: Too long" limit, apply them once with
+  #   kubectl apply --server-side -f deploy/charts/keycloak-operator/crds/
+  - name: keycloak-operator
+    namespace: identity
+    createNamespace: true
+    chart: ./charts/keycloak-operator
+    installed: {{ eq (env "DBZ_ENV" | default "local") "homelab" }}
+    timeout: 300
+    labels:
+      app: keycloak-operator
+      component: identity
+      infra: "true"
+
+  - name: keycloak-db
+    namespace: identity
+    createNamespace: true
+    chart: ./charts/keycloak-db
+    installed: {{ eq (env "DBZ_ENV" | default "local") "homelab" }}
+    timeout: 300
+    labels:
+      app: keycloak-db
+      component: identity
+      infra: "true"
+    needs:
+      - databases/cnpg-operator
+
+  - name: keycloak
+    namespace: identity
+    createNamespace: true
+    chart: ./charts/keycloak
+    installed: {{ eq (env "DBZ_ENV" | default "local") "homelab" }}
+    timeout: 600
+    # Do NOT roll back on failure: this release includes a cert-manager Certificate,
+    # and helm --wait blocks on it. If issuance lags (DNS-01) past the timeout, the
+    # default rollback-on-failure would UNINSTALL an otherwise-healthy Keycloak
+    # (Keycloak CR Ready, realm imported) just because the cert wasn't ready yet.
+    # atomic:false leaves the resources in place so a slow cert can catch up.
+    atomic: false
+    labels:
+      app: keycloak
+      component: identity
+      infra: "true"
+    values:
+      - values/keycloak/homelab.yaml.gotmpl
+    needs:
+      - identity/keycloak-operator
+      - identity/keycloak-db
+
+  # SSO Phase 2 learning app (homelab only) — a tiny Go service protected by OIDC
+  # against the dmp realm, at oidc-demo.${DBZ_DOMAIN}. Image built from the separate
+  # oidc-demo repo and pushed to zot. No `needs:` on keycloak: the app reaches
+  # Keycloak over the public URL (auth.${DBZ_DOMAIN}), not an in-cluster Service, so
+  # there is no hard ordering dependency. Like `keycloak` it bundles a cert-manager
+  # Certificate and inherits wait:true, so atomic:false — a lagging DNS-01 issuance
+  # must not roll back an otherwise-healthy app (see keycloak stanza / Phase 1 Issue 4).
+  - name: oidc-demo
+    namespace: tools
+    createNamespace: true
+    chart: ./charts/oidc-demo
+    installed: {{ eq (env "DBZ_ENV" | default "local") "homelab" }}
+    timeout: 300
+    atomic: false
+    labels:
+      app: oidc-demo
+      component: identity
+      infra: "false"
+    values:
+      - values/oidc-demo/homelab.yaml.gotmpl
+
+  # SSO Phase 3 — oauth2-proxy fronts dmp.${DBZ_DOMAIN} (stage UI + conductor /api) with a
+  # Keycloak login via Traefik ForwardAuth, handing the conductor a bearer it validates as
+  # an OIDC resource server. Temporary bridge until stage speaks OIDC natively.
+  # needs keycloak: oauth2-proxy fetches the realm's OIDC discovery at startup and won't go
+  # Ready until it resolves. atomic:false so a transient discovery/cert lag doesn't uninstall
+  # an otherwise-healthy proxy (same reasoning as the keycloak stanza).
+  - name: oauth2-proxy
+    namespace: identity
+    createNamespace: true
+    chart: oauth2-proxy/oauth2-proxy
+    version: '{{ requiredEnv "OAUTH2_PROXY_CHART_VERSION" }}'
+    installed: {{ eq (env "DBZ_ENV" | default "local") "homelab" }}
+    timeout: 300
+    atomic: false
+    labels:
+      app: oauth2-proxy
+      component: identity
+      infra: "true"
+    values:
+      - values/oauth2-proxy/homelab.yaml.gotmpl
+    needs:
+      - identity/keycloak
+
   - name: debezium-operator
     namespace: '{{ env "DBZ_NAMESPACE" | default "dmp" }}'
     createNamespace: true
@@ -278,12 +385,26 @@ releases:
     labels:
       app: debezium-operator
       component: operator
+    # The operator image is pinned independently of the chart version (DBZ_VERSION).
+    # The platform (conductor/stage) only publishes arm64 on `nightly`, so on the
+    # erebor arm64 homelab we must run nightly conductor/stage — and the operator +
+    # its DebeziumServer CRD must match that nightly line, or the operator fails to
+    # deserialize the CRs the nightly conductor emits (e.g. runtime.metrics.otel
+    # metricExportIntervalMs, added after 3.6.0). Vendor the matching nightly CRD via
+    # scripts (see docs). Default nightly; override with DBZ_OPERATOR_TAG.
+    set:
+      - name: image
+        value: quay.io/debezium/operator:{{ env "DBZ_OPERATOR_TAG" | default "nightly" }}
 
   - name: debezium-platform
     namespace: '{{ env "DBZ_NAMESPACE" | default "dmp" }}'
     createNamespace: true
-    chart: debezium/debezium-platform
-    version: '{{ requiredEnv "DBZ_VERSION" }}'
+    # Vendored from the debezium-platform repo's helm/ (branch build) rather than the
+    # published debezium/debezium-platform chart, because it carries the conductor.oidc
+    # block the homelab SSO demo needs (not yet in the released chart). Re-sync from
+    # ../debezium-platform/helm when that lands upstream, then switch back to the repo
+    # chart + DBZ_VERSION. Local path ⇒ no version pin (Chart.yaml is 0.0.1).
+    chart: ./charts/debezium-platform
     labels:
       app: debezium-platform
       component: platform
@@ -291,8 +412,8 @@ releases:
       - values/dmp/{{ env "DBZ_ENV" | default "local" }}.yaml.gotmpl
     set:
       - name: conductor.image
-        value: quay.io/debezium/platform-conductor:{{ env "DBZ_IMAGE_TAG_CONDUCTOR" | default "nightly" }}
+        value: {{ env "DBZ_IMAGE_REGISTRY_CONDUCTOR" | default "quay.io" }}/debezium/platform-conductor:{{ env "DBZ_IMAGE_TAG_CONDUCTOR" | default "nightly" }}
       - name: stage.image
-        value: quay.io/debezium/platform-stage:{{ env "DBZ_IMAGE_TAG" | default "nightly" }}
+        value: {{ env "DBZ_IMAGE_REGISTRY" | default "quay.io" }}/debezium/platform-stage:{{ env "DBZ_IMAGE_TAG" | default "nightly" }}
       - name: conductor.descriptors.official.tag
         value: {{ env "DBZ_IMAGE_TAG" | default "nightly" }}

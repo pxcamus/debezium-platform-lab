@@ -1,0 +1,364 @@
+suite: test conductor resources
+templates:
+  - conductor-deployment.yaml
+  - conductor-service.yaml
+  - conductor-ingress.yaml
+  - conductor-config-map.yaml
+  - conductor-service-account.yaml
+  - conductor-role.yaml
+  - conductor-role-binding.yaml
+values:
+  - ../../examples/example.yaml
+tests:
+  - it: should create conductor deployment with correct configuration
+    template: conductor-deployment.yaml
+    asserts:
+      - isKind:
+          of: Deployment
+      - equal:
+          path: metadata.name
+          value: conductor
+      - equal:
+          path: metadata.labels["app.kubernetes.io/name"]
+          value: conductor
+      - equal:
+          path: metadata.labels["app.kubernetes.io/component"]
+          value: backend
+      - equal:
+          path: metadata.labels["app.kubernetes.io/part-of"]
+          value: debezium-platform
+      - equal:
+          path: spec.replicas
+          value: 1
+      - equal:
+          path: spec.strategy.type
+          value: Recreate
+      - equal:
+          path: spec.selector.matchLabels["app.kubernetes.io/name"]
+          value: conductor
+      - equal:
+          path: spec.template.spec.serviceAccountName
+          value: conductor-service-account
+      - equal:
+          path: spec.template.spec.containers[0].name
+          value: conductor
+      - equal:
+          path: spec.template.spec.containers[0].ports[0].containerPort
+          value: 8080
+      - isNotEmpty:
+          path: spec.template.spec.containers[0].image
+      - equal:
+          path: spec.template.spec.containers[0].imagePullPolicy
+          value: IfNotPresent
+      - isNotEmpty:
+          path: spec.template.spec.containers[0].env
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: CONDUCTOR_WATCHER_OFFSET_STORAGE_TYPE
+            value: io.debezium.storage.configmap.ConfigMapOffsetStore
+      # Note: env count varies based on K8s version (descriptors config adds vars)
+      # K8s 1.35+: 9 vars (7 base + 2 descriptor volume vars)
+      # K8s <1.35: 14 vars (7 base + 2 descriptor + 5 ORAS vars)
+
+  - it: should create conductor service with correct ports
+    template: conductor-service.yaml
+    asserts:
+      - isKind:
+          of: Service
+      - equal:
+          path: metadata.name
+          value: conductor
+      - equal:
+          path: metadata.labels["app.kubernetes.io/name"]
+          value: conductor
+      - equal:
+          path: metadata.labels["app.kubernetes.io/component"]
+          value: backend
+      - equal:
+          path: spec.selector["app.kubernetes.io/name"]
+          value: conductor
+      - equal:
+          path: spec.ports[0].name
+          value: conductor-port
+      - equal:
+          path: spec.ports[0].port
+          value: 8080
+      - equal:
+          path: spec.ports[0].targetPort
+          value: 8080
+
+  - it: should create conductor ingress with correct routing
+    template: conductor-ingress.yaml
+    asserts:
+      - isKind:
+          of: Ingress
+      - equal:
+          path: metadata.name
+          value: conductor-ingress
+      - isNotEmpty:
+          path: spec.rules[0].host
+      - equal:
+          path: spec.rules[0].http.paths[0].path
+          value: /
+      - equal:
+          path: spec.rules[0].http.paths[0].pathType
+          value: Prefix
+      - equal:
+          path: spec.rules[0].http.paths[0].backend.service.name
+          value: stage
+      - equal:
+          path: spec.rules[0].http.paths[0].backend.service.port.number
+          value: 3000
+      - equal:
+          path: spec.rules[0].http.paths[1].path
+          value: /api
+      - equal:
+          path: spec.rules[0].http.paths[1].pathType
+          value: Prefix
+      - equal:
+          path: spec.rules[0].http.paths[1].backend.service.name
+          value: conductor
+      - equal:
+          path: spec.rules[0].http.paths[1].backend.service.port.number
+          value: 8080
+
+  - it: should create conductor configmap
+    template: conductor-config-map.yaml
+    asserts:
+      - isKind:
+          of: ConfigMap
+      - equal:
+          path: metadata.name
+          value: debezium-platform-offsets
+
+  - it: should create conductor service account
+    template: conductor-service-account.yaml
+    asserts:
+      - isKind:
+          of: ServiceAccount
+      - equal:
+          path: metadata.name
+          value: conductor-service-account
+
+  - it: should create conductor role with correct permissions
+    template: conductor-role.yaml
+    asserts:
+      - isKind:
+          of: Role
+      - equal:
+          path: metadata.name
+          value: conductor-debeziumservers-creator
+      - contains:
+          path: rules
+          content:
+            apiGroups: ["debezium.io"]
+            resources: ["debeziumservers"]
+            verbs: ["patch", "create", "delete", "list", "deletecollection"]
+          count: 1
+      - contains:
+          path: rules
+          content:
+            apiGroups: ["apps"]
+            resources: ["deployments", "replicasets"]
+            verbs: ["get", "list"]
+          count: 1
+      - contains:
+          path: rules
+          content:
+            apiGroups: [""]
+            resources: ["pods", "pods/log", "services"]
+            verbs: ["get", "list"]
+          count: 1
+
+  - it: should create conductor role binding
+    template: conductor-role-binding.yaml
+    asserts:
+      - isKind:
+          of: RoleBinding
+      - equal:
+          path: metadata.name
+          value: conductor-role-binding
+
+  - it: should create ingress with TLS enabled and secretName
+    template: conductor-ingress.yaml
+    set:
+      domain.name: example.com
+      ingress.tls.enabled: true
+      ingress.tls.secretName: my-tls-secret
+    asserts:
+      - isKind:
+          of: Ingress
+      - equal:
+          path: spec.tls[0].hosts[0]
+          value: example.com
+      - equal:
+          path: spec.tls[0].secretName
+          value: my-tls-secret
+      - equal:
+          path: spec.rules[0].host
+          value: example.com
+
+  - it: should create ingress with TLS enabled without secretName
+    template: conductor-ingress.yaml
+    set:
+      domain.name: example.com
+      ingress.tls.enabled: true
+      ingress.tls.secretName: ""
+    asserts:
+      - isKind:
+          of: Ingress
+      - equal:
+          path: spec.tls[0].hosts[0]
+          value: example.com
+      - isNull:
+          path: spec.tls[0].secretName
+      - equal:
+          path: spec.rules[0].host
+          value: example.com
+
+  - it: should create ingress with custom className
+    template: conductor-ingress.yaml
+    set:
+      domain.name: example.com
+      ingress.className: nginx
+    asserts:
+      - isKind:
+          of: Ingress
+      - equal:
+          path: spec.ingressClassName
+          value: nginx
+
+  - it: should create ingress with custom annotations
+    template: conductor-ingress.yaml
+    values:
+      - ../../examples/example.yaml
+    set:
+      ingress.annotations:
+        nginx.ingress.kubernetes.io/rewrite-target: /
+        cert-manager.io/cluster-issuer: letsencrypt-prod
+    asserts:
+      - isKind:
+          of: Ingress
+      - equal:
+          path: metadata.annotations["nginx.ingress.kubernetes.io/rewrite-target"]
+          value: /
+      - equal:
+          path: metadata.annotations["cert-manager.io/cluster-issuer"]
+          value: letsencrypt-prod
+
+  - it: should support backward compatibility with domain.url
+    template: conductor-ingress.yaml
+    set:
+      domain.url: legacy.example.com
+      domain.name: null
+    asserts:
+      - isKind:
+          of: Ingress
+      - equal:
+          path: spec.rules[0].host
+          value: legacy.example.com
+
+  - it: should configure pipeline labels via env variables
+    template: conductor-deployment.yaml
+    set:
+      pipeline.labels:
+        argocd.argoproj.io/instance: debezium-platform
+    asserts:
+      - isKind:
+          of: Deployment
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: PIPELINE_LABELS_ARGOCD_ARGOPROJ_IO_INSTANCE
+            value: "debezium-platform"
+
+  - it: should not add OIDC env variables when oidc is disabled
+    template: conductor-deployment.yaml
+    asserts:
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: QUARKUS_OIDC_TENANT_ENABLED
+            value: "true"
+
+  - it: should add OIDC env variables when oidc is enabled
+    template: conductor-deployment.yaml
+    set:
+      conductor.oidc:
+        enabled: true
+        authServerUrl: https://keycloak.example.com/realms/dmp
+        clientId: conductor
+        apiPolicy: authenticated
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: QUARKUS_OIDC_TENANT_ENABLED
+            value: "true"
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: OIDC_ISSUER
+            value: https://keycloak.example.com/realms/dmp
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: CONDUCTOR_API_POLICY
+            value: authenticated
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: QUARKUS_OIDC_TOKEN_AUDIENCE
+            value: conductor
+
+  - it: should add audience env variable when oidc audience is set
+    template: conductor-deployment.yaml
+    set:
+      conductor.oidc:
+        enabled: true
+        authServerUrl: https://keycloak.example.com/realms/dmp
+        audience: conductor
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: QUARKUS_OIDC_TOKEN_AUDIENCE
+            value: conductor
+
+  - it: should fail when oidc is enabled without authServerUrl
+    template: conductor-deployment.yaml
+    set:
+      conductor.oidc:
+        enabled: true
+        authServerUrl: ""
+    asserts:
+      - failedTemplate:
+          errorMessage: conductor.oidc.authServerUrl is required when conductor.oidc.enabled=true
+
+  - it: should add extra volumes and volume mounts to conductor deployment
+    template: conductor-deployment.yaml
+    set:
+      conductor.extraVolumes:
+        - name: truststore
+          configMap:
+            name: conductor-truststore
+      conductor.extraVolumeMounts:
+        - name: truststore
+          mountPath: /etc/truststore
+          readOnly: true
+    asserts:
+      - isKind:
+          of: Deployment
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: truststore
+            configMap:
+              name: conductor-truststore
+      - contains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content:
+            name: truststore
+            mountPath: /etc/truststore
+            readOnly: true

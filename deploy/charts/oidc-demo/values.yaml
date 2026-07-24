@@ -1,0 +1,56 @@
+# Defaults are overridden per-env by deploy/values/oidc-demo/homelab.yaml.gotmpl,
+# which injects the real DBZ_DOMAIN. Public host is oidc-demo.<domain>; the TLS
+# secret and wildcard Certificate follow the repo convention wildcard-<domain-dashed>-tls.
+domain: platform.debezium.local
+
+# Single replica on purpose: the app keeps sessions in memory (see the oidc-demo
+# repo), so a second replica would not share them. Move sessions to a signed
+# cookie / shared store before raising this.
+replicaCount: 1
+
+image:
+  repository: registry.platform.debezium.local/oidc-demo
+  tag: "0.1.0"
+  pullPolicy: IfNotPresent
+
+# The homelab registry (zot) is authenticated; the pull secret is created by hand
+# (git-ignored) and named here.
+imagePullSecrets: []
+#  - name: zot-pull
+
+service:
+  type: ClusterIP
+  port: 8080
+  targetPort: 8080
+
+container:
+  port: 8080
+
+# OIDC wiring. Non-secret values live here; issuer and redirect URL default to the
+# derived homelab hosts when left empty. The client secret and session secret come
+# from the Kubernetes Secret referenced below (never in values).
+oidc:
+  clientId: oidc-demo
+  issuer: ""       # default: https://auth.<domain>/realms/dmp
+  redirectURL: ""  # default: https://oidc-demo.<domain>/auth/callback
+
+secret:
+  name: oidc-demo-secret
+  clientSecretKey: client-secret
+  sessionSecretKey: session-secret
+
+tls:
+  certIssuer: letsencrypt-prod
+
+resources:
+  requests:
+    cpu: 25m
+    memory: 32Mi
+  limits:
+    memory: 128Mi
+
+podAnnotations: {}
+podLabels: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}

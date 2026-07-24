@@ -1,0 +1,10 @@
+apiVersion: v2
+name: keycloak-db
+description: >-
+  Dedicated CloudNativePG PostgreSQL cluster backing Keycloak in the homelab.
+  Deliberately separate from the demo `postgresql-cluster` (databases namespace)
+  so a platform rebuild never touches Keycloak's identity data. Requires the
+  cluster-scoped cnpg-operator to already be installed.
+type: application
+version: 0.1.0
+appVersion: "16"

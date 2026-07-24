@@ -1,0 +1,123 @@
+suite: test conductor descriptor ORAS download
+templates:
+  - conductor-deployment.yaml
+values:
+  - ../../examples/example.yaml
+tests:
+  - it: should use ORAS download with default configuration
+    template: conductor-deployment.yaml
+    asserts:
+      - isKind:
+          of: Deployment
+      # Should NOT have init containers
+      - isNull:
+          path: spec.template.spec.initContainers
+      # Should NOT have volumes
+      - isNull:
+          path: spec.template.spec.volumes
+      # Should NOT have volume mounts
+      - isNull:
+          path: spec.template.spec.containers[0].volumeMounts
+      # Check environment variables for ORAS mode
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: CONDUCTOR_DESCRIPTORS_VOLUME_SOURCE
+            value: "false"
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: CONDUCTOR_DESCRIPTORS_PATH
+            value: /opt/descriptors
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: CONDUCTOR_DESCRIPTORS_IMAGE_REGISTRY
+            value: quay.io
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: CONDUCTOR_DESCRIPTORS_IMAGE_NAME
+            value: debezium/debezium-descriptors
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: CONDUCTOR_DESCRIPTORS_IMAGE_TAG
+            value: nightly
+
+  - it: should use custom tag when configured
+    template: conductor-deployment.yaml
+    set:
+      conductor.descriptors.official.tag: 3.5.0
+    asserts:
+      - isKind:
+          of: Deployment
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: CONDUCTOR_DESCRIPTORS_IMAGE_TAG
+            value: 3.5.0
+
+  - it: should use custom mount path
+    template: conductor-deployment.yaml
+    set:
+      conductor.descriptors.official.mountPath: /custom/path/descriptors
+    asserts:
+      - isKind:
+          of: Deployment
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: CONDUCTOR_DESCRIPTORS_PATH
+            value: /custom/path/descriptors
+
+  - it: should use custom registry and image
+    template: conductor-deployment.yaml
+    set:
+      conductor.descriptors.official.registry: myregistry.io
+      conductor.descriptors.official.image: custom/descriptors
+      conductor.descriptors.official.tag: 1.0.0
+    asserts:
+      - isKind:
+          of: Deployment
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: CONDUCTOR_DESCRIPTORS_IMAGE_REGISTRY
+            value: myregistry.io
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: CONDUCTOR_DESCRIPTORS_IMAGE_NAME
+            value: custom/descriptors
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: CONDUCTOR_DESCRIPTORS_IMAGE_TAG
+            value: 1.0.0
+
+  - it: should disable official descriptors when configured
+    template: conductor-deployment.yaml
+    set:
+      conductor.descriptors.official.enabled: false
+    asserts:
+      - isKind:
+          of: Deployment
+      # Environment variables should not be set
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: CONDUCTOR_DESCRIPTORS_VOLUME_SOURCE
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: CONDUCTOR_DESCRIPTORS_PATH
+      # Volume mounts should not exist
+      - isNull:
+          path: spec.template.spec.containers[0].volumeMounts
+      # Volumes should not exist
+      - isNull:
+          path: spec.template.spec.volumes
+      # Init containers should not exist
+      - isNull:
+          path: spec.template.spec.initContainers

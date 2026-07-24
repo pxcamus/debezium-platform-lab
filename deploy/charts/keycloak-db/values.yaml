@@ -1,0 +1,13 @@
+# Dedicated CNPG Postgres for Keycloak. Override the password via a git-ignored
+# overlay (deploy/values/keycloak-db/homelab.secret.yaml) — the default here is a
+# homelab placeholder, flagged for the Phase 6 secrets migration (OpenBao).
+database: keycloak
+username: keycloak
+password: keycloak
+
+instances: 1
+imageName: ghcr.io/cloudnative-pg/postgresql:16
+
+storage:
+  size: 5Gi
+  storageClass: local-path

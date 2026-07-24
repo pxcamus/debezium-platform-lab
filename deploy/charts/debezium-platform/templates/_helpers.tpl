@@ -1,0 +1,141 @@
+{{/*
+Get the database secret name.
+*/}}
+{{- define "debezium-platform.secretName" -}}
+{{- if .Values.database.enabled -}}
+    {{ include "database.secretName" .Subcharts.database }}
+{{- else -}}
+    {{- required "A valid .Values.database.auth.existingSecret entry required!" .Values.database.auth.existingSecret -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Get the offset config map name.
+*/}}
+{{- define "debezium-platform.offsetConfigMapName" -}}
+{{- if empty .Values.conductor.offset.existingConfigMap -}}
+    {{- printf "%s-%s" .Chart.Name "offsets" -}}
+{{- else -}}
+    {{- .Values.conductor.offset.existingConfigMap -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Generates offset envs.
+*/}}
+{{- define "debezium-platform.offsetConfig" -}}
+{{- if not .Values.offset.reusePlatformDatabase -}}
+- name: OFFSET_JDBC_URL
+  value: jdbc:postgresql://{{ .Values.offset.database.host }}:{{ .Values.offset.database.port }}/{{ .Values.offset.database.name }}
+- name: OFFSET_JDBC_USERNAME
+{{- if .Values.offset.database.auth.existingSecret }}
+  valueFrom:
+    secretKeyRef:
+      name: {{ .Values.offset.database.auth.existingSecret }}
+      key: username
+{{- else }}
+  value: {{ .Values.offset.database.username }}
+{{- end }}
+- name: OFFSET_JDBC_PASSWORD
+{{- if .Values.offset.database.auth.existingSecret }}
+  valueFrom:
+    secretKeyRef:
+      name: {{ .Values.offset.database.auth.existingSecret }}
+      key: password
+{{- else }}
+  value: {{ .Values.offset.database.password }}
+{{- end }}
+{{- end }}
+{{- end }}
+
+{{/*
+Generates schema history envs.
+*/}}
+{{- define "debezium-platform.schemaHistoryConfig" -}}
+{{- if not .Values.schemaHistory.reusePlatformDatabase -}}
+- name: SCHEMA_HISTORY_JDBC_URL
+  value: jdbc:postgresql://{{ .Values.schemaHistory.database.host }}:{{ .Values.schemaHistory.database.port }}/{{ .Values.schemaHistory.database.name }}
+- name: SCHEMA_HISTORY_JDBC_USERNAME
+{{- if .Values.schemaHistory.database.auth.existingSecret }}
+  valueFrom:
+    secretKeyRef:
+      name: {{ .Values.schemaHistory.database.auth.existingSecret }}
+      key: username
+{{- else }}
+  value: {{ .Values.schemaHistory.database.username }}
+{{- end }}
+- name: SCHEMA_HISTORY_JDBC_PASSWORD
+{{- if .Values.schemaHistory.database.auth.existingSecret }}
+  valueFrom:
+    secretKeyRef:
+      name: {{ .Values.schemaHistory.database.auth.existingSecret }}
+      key: password
+{{- else }}
+  value: {{ .Values.schemaHistory.database.password }}
+{{- end }}
+{{- end }}
+{{- end }}
+
+{{/*
+Common labels
+*/}}
+
+{{- define "common.labels" -}}
+app.kubernetes.io/instance: {{ .Release.Name }}
+app.kubernetes.io/managed-by: {{ .Release.Service }}
+{{- end -}}
+
+{{/*
+Get the scheme for the domain, derived from ingress TLS.
+*/}}
+{{- define "debezium-platform.domainScheme" -}}
+{{- if .Values.domain.scheme -}}
+{{ .Values.domain.scheme }}
+{{- else if and .Values.ingress.enabled .Values.ingress.tls.enabled -}}
+https
+{{- else -}}
+http
+{{- end -}}
+{{- end -}}
+
+{{/*
+Get the domain URL, with backward compatibility to deprecated .Values.domain.url.
+*/}}
+{{- define "debezium-platform.domainUrl" -}}
+"{{ include "debezium-platform.domainScheme" . }}://{{ include "debezium-platform.domainName" . }}"
+{{- end -}}
+
+{{- define "debezium-platform.domainName" -}}
+{{ default .Values.domain.name .Values.domain.url }}
+{{- end -}}
+
+{{/*
+Converts a key to an environment variable name with a given prefix.
+Usage: include "debezium-platform.toEnv" (dict "prefix" "PIPELINE_LABELS" "key" "argocd.argoproj.io/instance")
+Result: PIPELINE_LABELS_ARGOCD_ARGOPROJ_IO_INSTANCE
+*/}}
+{{- define "debezium-platform.toEnv" -}}
+{{ .prefix }}_{{ .key | upper | replace "." "_" | replace "/" "_" | replace "-" "_" }}
+{{- end -}}
+
+{{/*
+Get the Prometheus URL. Required when monitoring.otel.enabled is true.
+*/}}
+{{- define "debezium-platform.prometheusUrl" -}}
+{{- required "monitoring.prometheus.url is required when monitoring.otel.enabled is true" .Values.monitoring.prometheus.url -}}
+{{- end -}}
+
+{{/*
+Get the OpenTelemetry Collector resource name.
+*/}}
+{{- define "debezium-platform.otelCollectorName" -}}
+{{- printf "%s-otel-collector" .Chart.Name -}}
+{{- end -}}
+
+{{/*
+Get the OpenTelemetry Collector OTLP endpoint URL.
+The OTel Operator creates a service named <collector-name>-collector for deployment mode.
+*/}}
+{{- define "debezium-platform.otelCollectorEndpoint" -}}
+{{- printf "http://%s-collector.%s.svc.cluster.local:%d" (include "debezium-platform.otelCollectorName" .) .Release.Namespace (int .Values.monitoring.otel.collector.receivers.http.port) -}}
+{{- end -}}

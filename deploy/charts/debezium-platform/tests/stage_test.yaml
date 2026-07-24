@@ -1,0 +1,81 @@
+suite: test stage resources
+templates:
+  - stage-deployment.yaml
+  - stage-service.yaml
+values:
+  - ../../examples/example.yaml
+tests:
+  - it: should create stage deployment with correct configuration
+    template: stage-deployment.yaml
+    asserts:
+      - isKind:
+          of: Deployment
+      - equal:
+          path: metadata.name
+          value: stage
+      - equal:
+          path: metadata.labels["app.kubernetes.io/name"]
+          value: stage
+      - equal:
+          path: metadata.labels["app.kubernetes.io/component"]
+          value: frontend
+      - equal:
+          path: metadata.labels["app.kubernetes.io/part-of"]
+          value: debezium-platform
+      - equal:
+          path: spec.replicas
+          value: 1
+      - equal:
+          path: spec.selector.matchLabels["app.kubernetes.io/name"]
+          value: stage
+      - equal:
+          path: spec.template.spec.containers[0].name
+          value: stage
+      - equal:
+          path: spec.template.spec.containers[0].ports[0].containerPort
+          value: 3000
+      - equal:
+          path: spec.template.spec.containers[0].ports[0].protocol
+          value: TCP
+      - isNotEmpty:
+          path: spec.template.spec.containers[0].image
+      - equal:
+          path: spec.template.spec.containers[0].imagePullPolicy
+          value: IfNotPresent
+      - isNotEmpty:
+          path: spec.template.spec.containers[0].env
+      - equal:
+          path: spec.template.spec.containers[0].env[0].name
+          value: CONDUCTOR_URL
+      - isNotEmpty:
+          path: spec.template.spec.containers[0].env[0].value
+      - equal:
+          path: spec.template.spec.restartPolicy
+          value: Always
+
+  - it: should create stage service with correct ports
+    template: stage-service.yaml
+    asserts:
+      - isKind:
+          of: Service
+      - equal:
+          path: metadata.name
+          value: stage
+      - equal:
+          path: metadata.labels["app.kubernetes.io/name"]
+          value: stage
+      - equal:
+          path: metadata.labels["app.kubernetes.io/component"]
+          value: frontend
+      - equal:
+          path: spec.selector["app.kubernetes.io/name"]
+          value: stage
+      - equal:
+          path: spec.ports[0].name
+          value: stage-port
+      - equal:
+          path: spec.ports[0].port
+          value: 3000
+      - equal:
+          path: spec.ports[0].targetPort
+          value: 3000

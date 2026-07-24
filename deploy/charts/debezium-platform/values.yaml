@@ -1,0 +1,119 @@
+domain:
+  url: ""
+  name: ""
+  # Override the scheme used to build the stage's CONDUCTOR_URL. Normally derived from
+  # ingress.enabled + ingress.tls.enabled; set this to "https" when an external proxy
+  # (e.g. oauth2-proxy) terminates TLS and the chart ingress is disabled.
+  scheme: ""
+stage:
+  image: quay.io/debezium/platform-stage:nightly
+  imagePullPolicy: IfNotPresent
+conductor:
+  image: quay.io/debezium/platform-conductor:nightly
+  imagePullPolicy: IfNotPresent
+  offset:
+    existingConfigMap: ""
+  descriptors:
+    official:
+      enabled: true
+      registry: quay.io
+      image: debezium/debezium-descriptors
+      tag: nightly
+      mountPath: /opt/descriptors
+  extraVolumes: [ ]
+  extraVolumeMounts: [ ]
+  # OIDC bearer-token security (resource-server / "service" mode). Disabled by
+  # default: the conductor behaves like an unsecured upstream deployment and
+  # contacts no OIDC issuer. When enabled, tokens are validated against the
+  # issuer's JWKS (no client secret required).
+  oidc:
+    enabled: false
+    # OIDC issuer / realm URL, e.g. https://keycloak.example.com/realms/dmp.
+    # Required when enabled.
+    authServerUrl: ""
+    # Client id the conductor identifies as to the issuer.
+    clientId: conductor
+    # Policy applied to /api/*: "authenticated" requires a valid bearer token;
+    # "permit" leaves the API open (token validated if present). May also name
+    # a custom role policy defined in the conductor configuration.
+    apiPolicy: authenticated
+    # Expected audience (aud) claim. Empty disables audience enforcement; set
+    # once the issuer adds this value to tokens (e.g. a Keycloak Audience mapper).
+    audience: ""
+server:
+  image: ""
+ingress:
+  enabled: true
+  className: ""
+  annotations: {}
+  tls:
+    enabled: false
+    secretName: ""
+offset:
+  reusePlatformDatabase: true
+  database:
+    name: postgres
+    host: postgres
+    port: 5432
+    username: user
+    password: password
+    auth:
+      existingSecret: ""
+schemaHistory:
+  reusePlatformDatabase: true
+  database:
+    name: postgres
+    host: postgres
+    port: 5432
+    username: user
+    password: password
+    auth:
+      existingSecret: ""
+database:
+  enabled: false
+  name: postgres
+  host: postgres
+  auth:
+    existingSecret: ""
+debezium-operator:
+  enabled: true
+pipeline:
+  labels: {}
+monitoring:
+  otel:
+    enabled: false
+    jmxIntervalMs: 1000
+    metricExportIntervalMs: 5000
+    collector:
+      # The Prometheus exporter is included in the base (otelcol) and contrib distributions,
+      # but NOT in the k8s distribution (otelcol-k8s) which is the default when the OTel Operator
+      # is installed via Helm. Override the image if your operator defaults to k8s distribution.
+      # Example: ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector:0.152.0
+      image: ""
+      replicas: 1
+      receivers:
+        grpc:
+          port: 4317
+        http:
+          port: 4318
+      processors:
+        batch:
+          timeout: 5s
+          sendBatchSize: 512
+      exporters:
+        prometheus:
+          port: 8889
+          resourceToTelemetryConversion: true
+          constLabels:
+            platform: debezium
+  panels:
+    additionalPanelsPath: ""
+    refreshInterval: 30s
+  prometheus:
+    url: ""
+    serviceMonitor:
+      enabled: true
+      scrapeInterval: 15s
+      labels:
+        prometheus: kube-prometheus
+env: []

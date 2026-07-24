@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Go-based automation for deploying and managing the Debezium Platform on Kubernetes. Uses **mage** (Go task runner) as the primary build system and **Taskfile** as a secondary YAML-based task runner for Kind cluster workflows.
+Go-based automation for deploying and managing the Debezium Platform on Kubernetes. Uses **mage** (Go task runner) as the build system.
 
 Module path: `dbz-mage` (imported as `dbz-mage/ko/...`)
 
@@ -21,11 +21,6 @@ mage helm:diff
 mage data:mongo
 mage data:pg
 mage scenario:mongodbRs
-
-# Taskfile (less common, mostly Kind + legacy workflows)
-task deploy
-task create-local-cluster
-task load-postgresql-data
 ```
 
 **There is no `go build` target** — the `magefile.go` uses `//go:build mage` tag so it only compiles via `mage`. The `main.go` is a standalone entry point that runs MongoDB setup directly (not the primary workflow).
@@ -36,8 +31,7 @@ task load-postgresql-data
 
 ```
 main.go                  # Standalone entry point (MongoDB setup)
-magefile.go              # Primary task runner (mage targets)
-Taskfile.yaml            # Secondary task runner (Kind + deploy)
+magefile.go              # Task runner (mage targets)
 
 ko/                      # Core library (import path: dbz-mage/ko/...)
 ├── cluster/             # K8s cluster lifecycle (Kind, K3s)
@@ -134,10 +128,9 @@ The `mage helm:all` applies releases in dependency order using separate helmfile
 ## Gotchas
 
 1. **Module name mismatch**: The Go module is `dbz-mage` but the directory is `oneint-k8s-mgt`. Imports use `dbz-mage/ko/...`.
-2. **Two task systems**: Both `magefile.go` and `Taskfile.yaml` exist. The magefile is the primary tool; Taskfile is mostly legacy for Kind-based local development.
-3. **DMP base URL resolution**: `ko/dmp/http_client.go` resolves the base URL as `DMP_BASE_URL` → `http://dmp.${DBZ_DOMAIN}` → `http://dmp.platform.debezium.local`. Override per-instance via the `BaseURL` field on the client struct.
-4. **Mage build tag**: The magefile has `//go:build mage` — it won't compile with regular `go build`. Use `mage` to run targets.
-5. **No idempotent apply for pipelines**: The `scenario:mongodbRs` mage target goes through `mongoRsBasic()` which uses `dmp.ResourceResolver` — idempotent. But the `ko/scenarios/service.go` path does NOT do FindByName (marked as TODO), so repeated calls there would create duplicates.
-6. **JSON payloads expect `name` field**: All DMP JSON payloads MUST have a `"name"` key, or the loader will error.
-7. **Commented-out code**: Both `magefile.go` and `helmfile.yaml.gotmpl` contain commented-out sections for retired/optional components (Apicurio, CDC dashboard, Kafka Connect). Don't uncomment without understanding the dependencies.
-8. **`.env` file required**: Both mage targets and Taskfile tasks call `automation.LoadEnv()` which loads `.env`. Without it, required env vars like `DBZ_VERSION` will be missing.
+2. **DMP base URL resolution**: `ko/dmp/http_client.go` resolves the base URL as `DMP_BASE_URL` → `http://dmp.${DBZ_DOMAIN}` → `http://dmp.platform.debezium.local`. Override per-instance via the `BaseURL` field on the client struct.
+3. **Mage build tag**: The magefile has `//go:build mage` — it won't compile with regular `go build`. Use `mage` to run targets.
+4. **No idempotent apply for pipelines**: The `scenario:mongodbRs` mage target goes through `mongoRsBasic()` which uses `dmp.ResourceResolver` — idempotent. But the `ko/scenarios/service.go` path does NOT do FindByName (marked as TODO), so repeated calls there would create duplicates.
+5. **JSON payloads expect `name` field**: All DMP JSON payloads MUST have a `"name"` key, or the loader will error.
+6. **Commented-out code**: Both `magefile.go` and `helmfile.yaml.gotmpl` contain commented-out sections for retired/optional components (Apicurio, CDC dashboard, Kafka Connect). Don't uncomment without understanding the dependencies.
+7. **Env loading is layered**: `automation.LoadEnv()` loads `.env` (secrets + host overrides) first, then `deploy/environment/versions.env` (shared version pins) as a fallback; `.env` values win, `versions.env` fills gaps. Version pins live in `versions.env` only. Both files are optional.

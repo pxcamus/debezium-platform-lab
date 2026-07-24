@@ -1,18 +1,34 @@
-env:
-    - name: QUARKUS_OTEL_EXPORTER_OTLP_ENDPOINT
-      value: "http://debezium-platform-otel-collector-collector.dmp.svc.cluster.local:4317"
+# NOTE: no manual env: QUARKUS_OTEL_EXPORTER_OTLP_ENDPOINT here — the vendored chart
+# sets it natively from monitoring.otel (templates/_helpers.tpl otelCollectorEndpoint).
+# Re-adding it produces a duplicate env key that server-side apply rejects.
 domain:
   name: dmp.{{ requiredEnv "DBZ_DOMAIN" }}
+  # oauth2-proxy terminates TLS in front and the chart ingress is disabled below, so the
+  # scheme can't be derived from ingress.tls — force https or the stage SPA calls the API
+  # over http:// and the browser blocks it as mixed content.
+  scheme: https
 database:
   enabled: true
 ingress:
-  className: traefik
-  tls:
-    enabled: true
+  # Disabled — oauth2-proxy owns the dmp.${DBZ_DOMAIN} ingress. It reverse-proxies to the
+  # stage + conductor Services and runs the Keycloak login in front, so a separate chart
+  # ingress here would just collide on the same host. See values/oauth2-proxy/homelab.yaml.gotmpl.
+  enabled: false
 debezium-operator:
   enabled: false
 conductor:
   imagePullPolicy: Always
+  # OIDC bearer-token validation (Quarkus service/resource-server mode). The conductor
+  # validates access tokens against the dmp realm's JWKS; it runs no browser login —
+  # oauth2-proxy fronts dmp.${DBZ_DOMAIN} and hands it a bearer. See the SSO runbook.
+  oidc:
+    enabled: true
+    authServerUrl: https://auth.{{ requiredEnv "DBZ_DOMAIN" }}/realms/dmp
+    clientId: conductor
+    apiPolicy: authenticated
+    # audience left empty on purpose during the oauth2-proxy bridge phase: the token is
+    # issued for the oauth2-proxy client, so aud enforcement would 401 it. Set this (plus
+    # a Keycloak audience mapper) once stage becomes the native OIDC client.
 stage:
   imagePullPolicy: Always
 monitoring:
