@@ -1,24 +1,15 @@
 name: Helm validation
 
+# Runs on every PR so the required "Helm lint, template validation, unit tests"
+# status is always reported. A path filter inside the job (not on the trigger)
+# decides whether to run the real validation or report a trivial pass — a
+# required check gated by `on.paths` never reports on unrelated PRs and blocks
+# them forever.
 on:
   pull_request:
-    paths:
-      - "deploy/charts/**"
-      - "deploy/values/**"
-      - "deploy/environment/**"
-      - "deploy/helmfile.yaml.gotmpl"
-      - ".github/workflows/helm-validation.yaml"
-      - "scripts/validate-helm.sh"
   push:
     branches:
       - main
-    paths:
-      - "deploy/charts/**"
-      - "deploy/values/**"
-      - "deploy/environment/**"
-      - "deploy/helmfile.yaml.gotmpl"
-      - ".github/workflows/helm-validation.yaml"
-      - "scripts/validate-helm.sh"
 
 jobs:
   helm:
@@ -29,15 +20,35 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Detect deploy changes
+        uses: dorny/paths-filter@v3
+        id: changes
+        with:
+          filters: |
+            deploy:
+              - "deploy/charts/**"
+              - "deploy/values/**"
+              - "deploy/environment/**"
+              - "deploy/helmfile.yaml.gotmpl"
+              - ".github/workflows/helm-validation.yaml"
+              - "scripts/validate-helm.sh"
+
+      - name: No deploy changes — skipping validation
+        if: steps.changes.outputs.deploy != 'true'
+        run: echo "No changes under deploy/ or the validation scripts; Helm validation not required for this change."
+
       - name: Install Helm
+        if: steps.changes.outputs.deploy == 'true'
         uses: azure/setup-helm@v4
         with:
           version: v4.2.3
 
       - name: Install helm-unittest plugin
+        if: steps.changes.outputs.deploy == 'true'
         run: helm plugin install https://github.com/helm-unittest/helm-unittest.git --verify=false
 
       - name: Install Helmfile
+        if: steps.changes.outputs.deploy == 'true'
         uses: helmfile/helmfile-action@v2
         with:
           helmfile-version: v1.7.1
@@ -45,6 +56,7 @@ jobs:
           helmfile-args: ''
 
       - name: Install kubeconform
+        if: steps.changes.outputs.deploy == 'true'
         run: |
           curl -L "https://github.com/yannh/kubeconform/releases/latest/download/kubeconform-linux-amd64.tar.gz" \
             | tar xz
@@ -52,4 +64,5 @@ jobs:
           kubeconform -v
 
       - name: Validate Helm assets
+        if: steps.changes.outputs.deploy == 'true'
         run: ./scripts/validate-helm.sh
