@@ -34,6 +34,9 @@ repositories:
   - name: open-telemetry
     url: https://open-telemetry.github.io/opentelemetry-helm-charts
 
+  - name: oauth2-proxy
+    url: https://oauth2-proxy.github.io/manifests
+
 releases:
   - name: ingress-nginx
     namespace: ingress-nginx
@@ -351,6 +354,29 @@ releases:
     values:
       - values/oidc-demo/homelab.yaml.gotmpl
 
+  # SSO Phase 3 — oauth2-proxy fronts dmp.${DBZ_DOMAIN} (stage UI + conductor /api) with a
+  # Keycloak login via Traefik ForwardAuth, handing the conductor a bearer it validates as
+  # an OIDC resource server. Temporary bridge until stage speaks OIDC natively.
+  # needs keycloak: oauth2-proxy fetches the realm's OIDC discovery at startup and won't go
+  # Ready until it resolves. atomic:false so a transient discovery/cert lag doesn't uninstall
+  # an otherwise-healthy proxy (same reasoning as the keycloak stanza).
+  - name: oauth2-proxy
+    namespace: identity
+    createNamespace: true
+    chart: oauth2-proxy/oauth2-proxy
+    version: '{{ requiredEnv "OAUTH2_PROXY_CHART_VERSION" }}'
+    installed: {{ eq (env "DBZ_ENV" | default "local") "homelab" }}
+    timeout: 300
+    atomic: false
+    labels:
+      app: oauth2-proxy
+      component: identity
+      infra: "true"
+    values:
+      - values/oauth2-proxy/homelab.yaml.gotmpl
+    needs:
+      - identity/keycloak
+
   - name: debezium-operator
     namespace: '{{ env "DBZ_NAMESPACE" | default "dmp" }}'
     createNamespace: true
@@ -373,8 +399,12 @@ releases:
   - name: debezium-platform
     namespace: '{{ env "DBZ_NAMESPACE" | default "dmp" }}'
     createNamespace: true
-    chart: debezium/debezium-platform
-    version: '{{ requiredEnv "DBZ_VERSION" }}'
+    # Vendored from the debezium-platform repo's helm/ (branch build) rather than the
+    # published debezium/debezium-platform chart, because it carries the conductor.oidc
+    # block the homelab SSO demo needs (not yet in the released chart). Re-sync from
+    # ../debezium-platform/helm when that lands upstream, then switch back to the repo
+    # chart + DBZ_VERSION. Local path ⇒ no version pin (Chart.yaml is 0.0.1).
+    chart: ./charts/debezium-platform
     labels:
       app: debezium-platform
       component: platform
