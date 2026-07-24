@@ -382,8 +382,8 @@ releases:
       - values/dmp/{{ env "DBZ_ENV" | default "local" }}.yaml.gotmpl
     set:
       - name: conductor.image
-        value: quay.io/debezium/platform-conductor:{{ env "DBZ_IMAGE_TAG_CONDUCTOR" | default "nightly" }}
+        value: {{ env "DBZ_IMAGE_REGISTRY_CONDUCTOR" | default "quay.io" }}/debezium/platform-conductor:{{ env "DBZ_IMAGE_TAG_CONDUCTOR" | default "nightly" }}
       - name: stage.image
-        value: quay.io/debezium/platform-stage:{{ env "DBZ_IMAGE_TAG" | default "nightly" }}
+        value: {{ env "DBZ_IMAGE_REGISTRY" | default "quay.io" }}/debezium/platform-stage:{{ env "DBZ_IMAGE_TAG" | default "nightly" }}
       - name: conductor.descriptors.official.tag
         value: {{ env "DBZ_IMAGE_TAG" | default "nightly" }}
