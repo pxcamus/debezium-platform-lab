@@ -1,0 +1,6 @@
+nav:
+  - index.md
+  - Check your machine: doctor.md
+  - Deploy the stack: deploy.md
+  - Run your first pipeline: first-pipeline.md
+  - ...

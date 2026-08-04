@@ -1,0 +1,108 @@
+site_name: Debezium Platform Lab
+site_description: Stand up the Debezium Platform on Kubernetes — a guided path from an empty machine to a running CDC pipeline.
+site_url: https://lab.1int.io/
+copyright: Documentation for debezium-platform-lab. Debezium is a trademark of Red Hat, Inc.
+
+repo_url: https://github.com/pxcamus/debezium-platform-lab
+repo_name: pxcamus/debezium-platform-lab
+edit_uri: edit/main/docs/
+
+use_directory_urls: true
+docs_dir: docs
+site_dir: site
+
+theme:
+  name: material
+  language: en
+  icon:
+    repo: fontawesome/brands/github
+  features:
+    - navigation.tabs          # one tab per top-level section
+    - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.path          # breadcrumbs
+    - navigation.top
+    - navigation.tracking
+    - navigation.indexes       # a section's index.md is its landing page
+    - toc.follow
+    - search.suggest
+    - search.highlight
+    - search.share
+    - content.action.edit
+    - content.code.copy
+    - content.tooltips
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: teal
+      accent: teal
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: teal
+      accent: teal
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+
+plugins:
+  - search:
+      # Splits on code punctuation AND at camelCase boundaries, so `kubeContext`,
+      # `DBZ_ENV`, and `cluster:recreate` are each findable by their parts.
+      separator: '[\s\-,:!=\[\]()"/]+|(?!\b)(?=[A-Z][a-z])|\.(?!\d)|&[lg]t;'
+  - awesome-nav:
+      logs:
+        # The `...` rest token in a .nav.yml matches nothing while every file is
+        # explicitly listed — that's the normal state, not a problem. A genuine typo
+        # still surfaces: the real file becomes unlisted, which validation.omitted_files
+        # below reports.
+        no_matches: info
+
+markdown_extensions:
+  - abbr
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+      permalink_title: Link to this section
+      # GitHub-compatible heading slugs, so hand-written anchors resolve the same
+      # here as they do when the file is read on GitHub.
+      slugify: !!python/object/apply:pymdownx.slugs.slugify
+        kwds:
+          case: lower
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.keys
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.superfences:
+      custom_fences:
+        # Renders ```mermaid fences as diagrams.
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+
+# Every warning below is an error under `--strict`, which is how CI runs the build.
+validation:
+  omitted_files: warn
+  absolute_links: warn
+  unrecognized_links: warn
+  anchors: warn
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/pxcamus/debezium-platform-lab
+      name: debezium-platform-lab on GitHub

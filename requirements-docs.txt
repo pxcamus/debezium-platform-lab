@@ -1,0 +1,5 @@
+# Documentation site toolchain (MkDocs Material). Kept out of docs/ so it is not
+# copied into the rendered site. Install with:
+#   pip install -r requirements-docs.txt
+mkdocs-material>=9.7,<10
+mkdocs-awesome-nav>=3.3,<4

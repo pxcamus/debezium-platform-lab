@@ -1,0 +1,96 @@
+name: Docs
+
+# Same shape as the other workflows: the job always runs so it can report status on every
+# PR, and a path filter inside the job decides whether to do the real work. A required
+# check gated by `on.paths` never reports on unrelated PRs and blocks them forever.
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Never let two Pages deployments race. In-progress runs finish rather than being
+# cancelled, so a half-uploaded artifact is never published.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build docs site
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.decide.outputs.run }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Detect docs changes
+        uses: dorny/paths-filter@v3
+        id: changes
+        with:
+          filters: |
+            docs:
+              - "docs/**"
+              - "mkdocs.yml"
+              - "requirements-docs.txt"
+              - ".github/workflows/docs.yaml"
+
+      - name: Decide whether to build
+        id: decide
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" || "${{ steps.changes.outputs.docs }}" == "true" ]]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "No documentation changes; skipping the site build."
+          fi
+
+      - name: Set up Python
+        if: steps.decide.outputs.run == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: requirements-docs.txt
+
+      - name: Install toolchain
+        if: steps.decide.outputs.run == 'true'
+        run: pip install -r requirements-docs.txt
+
+      # --strict promotes every warning to an error, which is what makes broken internal
+      # links, missing anchors and pages absent from the nav fail the build. The
+      # troubleshooting anchors the CLI links to are covered by this.
+      - name: Build (strict)
+        if: steps.decide.outputs.run == 'true'
+        run: mkdocs build --clean --strict
+
+      - name: Upload Pages artifact
+        if: steps.decide.outputs.run == 'true' && github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    if: needs.build.outputs.run == 'true' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+
+    permissions:
+      pages: write
+      id-token: write
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4

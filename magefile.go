@@ -25,6 +25,7 @@ type Cluster mg.Namespace
 type Helm mg.Namespace
 type Data mg.Namespace
 type Scenario mg.Namespace
+type Docs mg.Namespace
 
 // Recreate deletes and recreates the remote k3s cluster, then refreshes local kubeconfig.
 func (Cluster) Recreate() error {
@@ -397,6 +398,32 @@ func (Scenario) MongodbRs() error {
 // All applies every wired DMP scenario in dependency order.
 func (Scenario) All() error {
 	return mongoRsBasic()
+}
+
+// Serve renders the documentation site with live reload. Defaults to port 8001 rather
+// than mkdocs' 8000 so this site and the private notes site can run side by side.
+// Override with DOCS_ADDR.
+func (Docs) Serve() error {
+	return docsCommand("serve", "--open", "--dev-addr", automation.Env("DOCS_ADDR", "127.0.0.1:8001"))
+}
+
+// Build renders the documentation site into site/. Warnings are errors, matching CI.
+func (Docs) Build() error {
+	return docsCommand("build", "--clean", "--strict")
+}
+
+// docsCommand runs mkdocs, preferring uv so no virtualenv has to be managed by hand.
+// Falls back to a mkdocs already on PATH.
+func docsCommand(args ...string) error {
+	if _, err := exec.LookPath("uv"); err == nil {
+		return run("uv", append([]string{"run", "--with-requirements", "requirements-docs.txt", "mkdocs"}, args...)...)
+	}
+
+	if _, err := exec.LookPath("mkdocs"); err != nil {
+		return fmt.Errorf("neither uv nor mkdocs found on PATH; install uv, or run: pip install -r requirements-docs.txt")
+	}
+
+	return run("mkdocs", args...)
 }
 
 // mongoRsBasic ensures the common DMP artifacts and the MongoDB replica-set
