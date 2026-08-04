@@ -9,10 +9,15 @@ kubeconfig*
 deploy/values/**/*.secret.yaml
 
 # Symlinked / external working dirs
+# `notes` is a symlink into the private oneint_docs repo. `docs/` is the public
+# MkDocs site in this repo and must stay tracked — do not ignore it.
 examples
 /kafka/
-/docs
+/notes
 /thorin
+
+# Rendered MkDocs output
+/site
 
 # IDE
 .idea/
