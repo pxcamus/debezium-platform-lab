@@ -16,6 +16,7 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/magefile/mage/mg"
@@ -412,18 +413,78 @@ func (Docs) Build() error {
 	return docsCommand("build", "--clean", "--strict")
 }
 
-// docsCommand runs mkdocs, preferring uv so no virtualenv has to be managed by hand.
-// Falls back to a mkdocs already on PATH.
+const (
+	docsVenvDir      = ".venv"
+	docsRequirements = "requirements-docs.txt"
+)
+
+// docsCommand runs mkdocs from a persistent virtualenv, creating it on first use.
+//
+// An ephemeral per-run environment (`uv run --with-requirements`) is fine for a one-shot
+// build, but `mkdocs serve` loses its file watcher when watchdog's native extension lives
+// in a temp tree that goes away: the HTTP server keeps answering while edits stop being
+// picked up, which looks like a caching bug rather than a dead watcher.
 func docsCommand(args ...string) error {
+	if err := ensureDocsVenv(); err != nil {
+		return err
+	}
+
+	return run(filepath.Join(docsVenvDir, "bin", "mkdocs"), args...)
+}
+
+// ensureDocsVenv creates .venv if it is missing and reinstalls it when
+// requirements-docs.txt has changed since the last install.
+func ensureDocsVenv() error {
+	mkdocsBin := filepath.Join(docsVenvDir, "bin", "mkdocs")
+
+	current, err := docsVenvIsCurrent(mkdocsBin)
+	if err != nil {
+		return err
+	}
+	if current {
+		return nil
+	}
+
+	fmt.Printf("Preparing docs virtualenv in %s/\n", docsVenvDir)
+
 	if _, err := exec.LookPath("uv"); err == nil {
-		return run("uv", append([]string{"run", "--with-requirements", "requirements-docs.txt", "mkdocs"}, args...)...)
+		if err := run("uv", "venv", docsVenvDir); err != nil {
+			return err
+		}
+
+		return run("uv", "pip", "install",
+			"--python", filepath.Join(docsVenvDir, "bin", "python"),
+			"--requirement", docsRequirements)
 	}
 
-	if _, err := exec.LookPath("mkdocs"); err != nil {
-		return fmt.Errorf("neither uv nor mkdocs found on PATH; install uv, or run: pip install -r requirements-docs.txt")
+	if _, err := exec.LookPath("python3"); err != nil {
+		return fmt.Errorf("neither uv nor python3 found on PATH; install uv (https://docs.astral.sh/uv/) to build the docs")
 	}
 
-	return run("mkdocs", args...)
+	if err := run("python3", "-m", "venv", docsVenvDir); err != nil {
+		return err
+	}
+
+	return run(filepath.Join(docsVenvDir, "bin", "pip"), "install", "--quiet", "--requirement", docsRequirements)
+}
+
+// docsVenvIsCurrent reports whether the virtualenv exists and was installed after the
+// last edit to requirements-docs.txt.
+func docsVenvIsCurrent(mkdocsBin string) (bool, error) {
+	binInfo, err := os.Stat(mkdocsBin)
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+
+	reqInfo, err := os.Stat(docsRequirements)
+	if err != nil {
+		return false, fmt.Errorf("%s not found: %w", docsRequirements, err)
+	}
+
+	return binInfo.ModTime().After(reqInfo.ModTime()), nil
 }
 
 // mongoRsBasic ensures the common DMP artifacts and the MongoDB replica-set

@@ -1,0 +1,26 @@
+#cloud-config
+# Deliberately minimal. This machine must start out BARE — the whole point of the lab VM
+# is to test what a real operator hits on a fresh install, and anything pre-installed here
+# is a check that never gets exercised.
+#
+# The only thing configured is a non-root user, because operators do not work as root and
+# a root-only box would hide every permission problem (notably the docker group).
+
+package_update: false
+package_upgrade: false
+
+users:
+  - name: lab
+    groups: [sudo]
+    shell: /bin/bash
+    sudo: "ALL=(ALL) NOPASSWD:ALL"
+    lock_passwd: true
+
+runcmd:
+  # Hetzner injects the project SSH key into root only. Copy it to the lab user so the
+  # provisioning script never has to handle key material itself.
+  - install -d -m 0700 -o lab -g lab /home/lab/.ssh
+  - cp /root/.ssh/authorized_keys /home/lab/.ssh/authorized_keys
+  - chown lab:lab /home/lab/.ssh/authorized_keys
+  - chmod 0600 /home/lab/.ssh/authorized_keys
+  - touch /var/lib/cloud/instance/lab-ready

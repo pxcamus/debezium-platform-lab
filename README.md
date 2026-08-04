@@ -8,6 +8,8 @@ It provisions a change-data-capture (CDC) stack — Kafka (Strimzi), PostgreSQL 
 
 Defaults target a local Kind cluster. Passwords in the Helm charts and `.env.example` are non-secret demo values.
 
+**📖 Documentation: [lab.1int.io](https://lab.1int.io/)** — start with [Get running](https://lab.1int.io/getting-started/) for the guided walkthrough, or [Troubleshooting](https://lab.1int.io/troubleshooting/) when something fails. The quick start below is the condensed version of the same path.
+
 ---
 
 ## Prerequisites
@@ -26,6 +28,8 @@ Optional: [kubeconform](https://github.com/yannh/kubeconform) (used by CI/helm v
 ---
 
 ## Quick start (local Kind)
+
+For the step-by-step version — what each command does, what healthy output looks like, and what to do when it doesn't — see [Get running](https://lab.1int.io/getting-started/).
 
 ```bash
 # 1. Configure environment
