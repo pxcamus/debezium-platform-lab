@@ -1,0 +1,54 @@
+version: 2
+
+project_name: dmp-lab
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: dmp-lab
+    main: ./cmd/dmp-lab
+    binary: dmp-lab
+    # A doctor that reports missing prerequisites cannot itself have any. CGO off keeps the
+    # binary statically linked, so it runs on a machine with nothing installed — which is
+    # the only machine it is ever asked about.
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    # arm64 is built deliberately even though the platform images are amd64-only: on an
+    # arm64 machine the most useful thing this tool can do is say so, which it cannot do if
+    # it will not run there.
+    ldflags:
+      - -s -w -X main.version={{.Version}}
+
+archives:
+  - id: dmp-lab
+    formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - LICENSE*
+      - README.md
+
+checksum:
+  name_template: checksums.txt
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+
+release:
+  draft: false
+  prerelease: auto

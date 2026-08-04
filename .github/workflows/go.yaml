@@ -61,6 +61,10 @@ jobs:
         if: steps.changes.outputs.go == 'true'
         run: go build ./...
 
+      - name: Test
+        if: steps.changes.outputs.go == 'true'
+        run: go test ./...
+
       # magefile.go carries the //go:build mage tag, so it is excluded from the
       # plain build/vet above. 'mage -l' compiles it in isolation, which is the
       # only way to catch magefile compile errors in CI.
