@@ -27,35 +27,25 @@ const registryProbeTimeout = 10 * time.Second
 // an unauthenticated /v2/ request with 401, and three of the four registries here do
 // exactly that — only registry.k8s.io allows anonymous access and returns 200. Testing for
 // 200 alone reports three healthy registries as unreachable.
-func ImagePull() Check {
+func ImagePull(target Target) Check {
 	return Check{
 		ID:    "image-pull",
-		Title: "Registries reachable and architecture supported",
-		Run:   runImagePull,
+		Title: "Image downloads",
+		Run: func(ctx context.Context) Result {
+			return runImagePull(ctx, target)
+		},
 	}
 }
 
-func runImagePull(ctx context.Context) Result {
-	// Checked here because an unsupported architecture surfaces as a pull failure, but it
-	// is worth its own identifier: every other finding on this page is remediable, and this
-	// one can only be answered by using a different machine.
-	if runtime.GOARCH != "amd64" {
-		return Result{
-			Status:  StatusFail,
-			Summary: fmt.Sprintf("architecture %s is not supported by the platform images", runtime.GOARCH),
-			Detail: "The Debezium Platform release images are published for amd64 only; just the " +
-				"nightly tag is multi-arch. Pulls fail with manifest errors that do not mention " +
-				"architecture.",
-			Remedy:   []string{"Deploy from an amd64 machine, or pin the platform to the nightly tag."},
-			Observed: map[string]string{"arch": runtime.GOARCH, "os": runtime.GOOS},
-		}
+func runImagePull(ctx context.Context, target Target) Result {
+	observed := map[string]string{
+		"arch":   runtime.GOARCH,
+		"os":     runtime.GOOS,
+		"target": string(target),
 	}
 
-	results := probeRegistries(ctx)
-
-	observed := map[string]string{"arch": runtime.GOARCH}
 	var unreachable []string
-	for host, outcome := range results {
+	for host, outcome := range probeRegistries(ctx) {
 		observed[host] = outcome.describe()
 		if !outcome.reachable {
 			unreachable = append(unreachable, host)
@@ -63,24 +53,61 @@ func runImagePull(ctx context.Context) Result {
 	}
 	sort.Strings(unreachable)
 
-	if len(unreachable) > 0 {
+	// Reported together with reachability rather than short-circuiting ahead of it: an
+	// operator on an unsupported architecture still needs to know whether their network can
+	// reach the registries, because the remote path depends on it and the local one does not.
+	archOK := runtime.GOARCH == "amd64"
+
+	switch {
+	case !archOK && target.RunsWorkloadsHere():
 		return Result{
-			Status:  StatusWarn,
-			Summary: fmt.Sprintf("%d of %d registries unreachable: %s", len(unreachable), len(platformRegistries), strings.Join(unreachable, ", ")),
-			Detail: "Image pulls will fail during deployment. A proxy or egress filter is the " +
-				"usual cause on a corporate network.",
+			Status:  StatusFail,
+			Summary: fmt.Sprintf("this machine's processor (%s) cannot run the platform's images%s", runtime.GOARCH, registrySuffix(unreachable)),
+			Detail: "The platform is published for Intel and AMD processors only. On this " +
+				"machine the download fails with an error about missing manifests, which never " +
+				"mentions the processor — so it is worth knowing before you start.",
 			Remedy: []string{
-				"Check HTTPS egress to the listed hosts, including any proxy configuration.",
+				fmt.Sprintf("Deploy to a cluster instead of this machine: dmp-lab doctor --target %s", TargetRemote),
+				"Or switch the platform to its nightly build, which supports this processor.",
 			},
 			Observed: observed,
 		}
-	}
 
-	return Result{
-		Status:   StatusPass,
-		Summary:  fmt.Sprintf("all %d registries reachable, architecture amd64", len(platformRegistries)),
-		Observed: observed,
+	case !archOK:
+		return Result{
+			Status:   StatusInfo,
+			Summary:  fmt.Sprintf("this machine's processor (%s) does not matter here%s", runtime.GOARCH, registrySuffix(unreachable)),
+			Detail:   "The images run on the cluster's machines, not on this one.",
+			Observed: observed,
+		}
+
+	case len(unreachable) > 0:
+		return Result{
+			Status: StatusWarn,
+			Summary: fmt.Sprintf("cannot reach %d of the %d servers the platform downloads from: %s",
+				len(unreachable), len(platformRegistries), strings.Join(unreachable, ", ")),
+			Detail: "The deployment will stop part-way through, waiting for downloads that " +
+				"never arrive. A company proxy or firewall is the usual cause.",
+			Remedy: []string{
+				"Check that this machine can reach those addresses over HTTPS, including any proxy settings.",
+			},
+			Observed: observed,
+		}
+
+	default:
+		return Result{
+			Status:   StatusPass,
+			Summary:  "all downloads reachable, and this machine can run the images",
+			Observed: observed,
+		}
 	}
+}
+
+func registrySuffix(unreachable []string) string {
+	if len(unreachable) == 0 {
+		return "; downloads are reachable"
+	}
+	return fmt.Sprintf("; also cannot reach %s", strings.Join(unreachable, ", "))
 }
 
 type probeOutcome struct {

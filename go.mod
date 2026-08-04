@@ -10,6 +10,7 @@ require (
 	github.com/magefile/mage v1.17.2
 	github.com/spf13/cobra v1.10.2
 	go.mongodb.org/mongo-driver/v2 v2.6.0
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (

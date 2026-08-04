@@ -55,11 +55,24 @@ Kubernetes path is the only one that works today.
 | Deploy somewhere other than Kind | [Guides](guides/index.md) |
 | Look up a target, variable or value | [Reference](reference/index.md) |
 
-## Before you start
+## Before you start { #resources-required }
 
-The [Get running](getting-started/index.md) path expects a machine with roughly 4 CPUs,
-8 GB of RAM and 30 GB of free disk, and pulls around 20 container images the first time.
- 
+How much machine you need depends on where the platform runs.
+
+| Deployment | Runs on | Needs |
+|---|---|---|
+| **Kind** | your machine | roughly 4 CPUs, 8 GB RAM, 30 GB free disk |
+| **k3s** | a server you connect to | the same, on that server — your own machine only needs the tools |
+| **Existing cluster** | wherever it already runs | capacity on the cluster; nothing in particular here |
+
+The first deployment pulls around 20 container images, so expect it to take longer than
+later ones.
+
+These figures describe today's all-in deployment, which includes components not every
+pipeline uses. They are a starting point rather than a measured minimum — if you get a
+deployment running comfortably on less, that is useful to hear about.
+
 <!-- TODO: add the architecture diagram and a terminal recording of a full deploy. -->
-<!-- TODO: the resource figures above cover today's all-in deployment. Revisit once the
-     lab profile drops Kafka from the default path. -->
+<!-- TODO: replace the figures above with measurements once a deployment has been run with
+     memory instrumented. Revisit again once the lab profile drops Kafka from the default
+     path. `dmp-lab doctor` links here from its memory check. -->

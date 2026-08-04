@@ -3,9 +3,10 @@ package preflight
 import (
 	"context"
 	"os/exec"
-	"runtime"
 	"strings"
 )
+
+const dockerInstallURL = "https://docs.docker.com/get-docker/"
 
 // ContainerRuntime reports whether a container runtime is installed, running, and usable by
 // the current user.
@@ -16,7 +17,7 @@ import (
 func ContainerRuntime() Check {
 	return Check{
 		ID:    "container-runtime",
-		Title: "Container runtime reachable",
+		Title: "Container runtime",
 		Run:   runContainerRuntime,
 	}
 }
@@ -32,7 +33,7 @@ func runContainerRuntime(ctx context.Context) Result {
 		version := strings.TrimSpace(string(out))
 		return Result{
 			Status:   StatusPass,
-			Summary:  "docker daemon reachable, server " + version,
+			Summary:  "Docker is running",
 			Observed: map[string]string{"runtime": "docker", "serverVersion": version, "path": path},
 		}
 	}
@@ -46,17 +47,20 @@ func runContainerRuntime(ctx context.Context) Result {
 
 	switch {
 	case strings.Contains(detail, "permission denied"):
-		res.Summary = "docker is installed but this user cannot open its socket"
+		res.Summary = "Docker is installed, but your user is not allowed to use it"
+		res.Detail = "Adding yourself to the docker group needs a new login session to take " +
+			"effect — this is why it can look like the change did nothing."
 		res.Remedy = []string{
 			"sudo usermod -aG docker $USER",
-			"newgrp docker   # or log out and back in — group changes need a new session",
+			"newgrp docker",
 		}
 	case strings.Contains(detail, "Cannot connect to the Docker daemon"),
 		strings.Contains(detail, "Is the docker daemon running"):
-		res.Summary = "docker is installed but the daemon is not running"
+		res.Summary = "Docker is installed, but it is not running"
+		res.Detail = ""
 		res.Remedy = []string{"sudo systemctl enable --now docker"}
 	default:
-		res.Summary = "docker is installed but 'docker info' failed"
+		res.Summary = "Docker is installed, but it is not responding"
 	}
 
 	return res
@@ -65,26 +69,29 @@ func runContainerRuntime(ctx context.Context) Result {
 func dockerMissing(ctx context.Context) Result {
 	observed := map[string]string{"runtime": "none"}
 
-	remedy := []string{"sudo apt-get install -y docker.io"}
-	if runtime.GOOS == "darwin" {
-		remedy = []string{"brew install --cask docker   # then start Docker Desktop"}
-	}
+	// Docker's own instructions rather than a package-manager command: this runs on
+	// distributions with different package managers, on macOS, and behind corporate
+	// installers, and guessing wrong sends someone down a path that cannot work. Docker
+	// documents every one of those cases and keeps the page current.
+	remedy := []string{"Install Docker: " + dockerInstallURL}
 
 	if podman, err := exec.LookPath("podman"); err == nil {
 		observed["podman"] = podman
 		return Result{
 			Status:  StatusWarn,
-			Summary: "docker not found; podman is installed but is not the tested runtime",
-			Detail: "kind can run on podman, but this project is only exercised against docker. " +
-				"Expect to hit differences that are not documented here.",
+			Summary: "Docker is not installed; Podman is, but it is not what this project is tested with",
+			Detail: "The deployment may work on Podman, but nothing here has been verified " +
+				"against it, so any problem you hit will be undocumented.",
 			Remedy:   remedy,
 			Observed: observed,
 		}
 	}
 
 	return Result{
-		Status:   StatusFail,
-		Summary:  "no container runtime found",
+		Status:  StatusFail,
+		Summary: "Docker is not installed",
+		Detail: "Docker runs the platform's containers. Nothing can be deployed without a " +
+			"container runtime.",
 		Remedy:   remedy,
 		Observed: observed,
 	}

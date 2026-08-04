@@ -11,75 +11,87 @@ import (
 	"strings"
 )
 
-// memoryFloorGiB is the amount of memory below which the deployment is expected to fail.
-//
-// Expressed in GiB, and compared against *available* rather than total, because both
-// details are load-bearing. A Hetzner cpx32 is sold as "8 GB" and reports 7.6 GiB total,
-// 7.2 GiB available: a naive "at least 8 GB" test fails the machine this project uses as
-// its own reference. Total is also the wrong quantity — it says nothing about what the
-// deployment can actually have.
-//
-// The value is provisional. It is set below the reference machine on the evidence that the
-// reference machine works, not on a measurement of what the stack peaks at; one instrumented
-// deployment should replace it with a real number.
-const memoryFloorGiB = 7.0
+// memoryLowGiB is where the reported total stops looking comfortable for any deployment
+// shape. It is not a requirement and never blocks: what the platform actually needs depends
+// on whether it runs in Kind here, on a k3s node, or directly on a host, and this command
+// cannot know which numbers apply until far more is decided.
+const memoryLowGiB = 7.0
 
-const bytesPerGiB = 1024 * 1024 * 1024
+const resourcesDocURL = "https://lab.1int.io/#resources-required"
 
-// Memory reports whether the machine has enough usable RAM for the platform.
-func Memory() Check {
+// Memory reports how much memory the machine has.
+//
+// Detection only, deliberately. An earlier version reported "free" memory and compared it
+// against a threshold, which was wrong twice over: on macOS no free figure was ever
+// measured — the total was reported in its place — and a single threshold cannot describe
+// requirements that vary by an order of magnitude between deployment shapes. Reporting a
+// measurement that was not taken is worse than reporting nothing.
+func Memory(target Target) Check {
 	return Check{
 		ID:    "insufficient-memory",
-		Title: "Sufficient memory",
-		Run:   runMemory,
+		Title: "Memory",
+		Run: func(ctx context.Context) Result {
+			return runMemory(ctx, target)
+		},
 	}
 }
 
-func runMemory(ctx context.Context) Result {
-	available, total, err := readMemory(ctx)
+func runMemory(ctx context.Context, target Target) Result {
+	total, available, err := readMemory(ctx)
 	if err != nil {
 		return Result{
 			Status:  StatusSkip,
-			Summary: "could not determine available memory",
+			Summary: "could not detect how much memory this machine has",
 			Detail:  err.Error(),
 		}
 	}
 
 	observed := map[string]string{
-		"availableGiB": fmt.Sprintf("%.1f", available),
-		"totalGiB":     fmt.Sprintf("%.1f", total),
-		"floorGiB":     fmt.Sprintf("%.1f", memoryFloorGiB),
+		"totalGiB": fmt.Sprintf("%.1f", total),
+		"target":   string(target),
+	}
+	if available > 0 {
+		observed["availableGiB"] = fmt.Sprintf("%.1f", available)
 	}
 
-	if available < memoryFloorGiB {
+	if !target.RunsWorkloadsHere() {
 		return Result{
-			Status: StatusFail,
-			Summary: fmt.Sprintf("%.1f GiB available, need at least %.1f GiB",
-				available, memoryFloorGiB),
-			Detail: "Below this the Kafka broker is typically killed part-way through startup, " +
-				"which surfaces as an unrelated-looking timeout elsewhere in the stack.",
-			Remedy: []string{
-				"Close other workloads, or move to a machine with more memory.",
-			},
+			Status:   StatusInfo,
+			Summary:  fmt.Sprintf("%.1f GiB detected; the platform runs on the cluster, not here", total),
 			Observed: observed,
 		}
 	}
 
+	const caveat = "Best-effort detection. How much is actually needed depends on the " +
+		"deployment type — Kind here, k3s, or directly on a host."
+
+	status := StatusInfo
+	if total < memoryLowGiB {
+		status = StatusWarn
+	}
+
 	return Result{
-		Status:   StatusPass,
-		Summary:  fmt.Sprintf("%.1f GiB available of %.1f GiB total", available, total),
+		Status:   status,
+		Summary:  fmt.Sprintf("%.1f GiB detected", total),
+		Detail:   caveat,
+		Link:     resourcesDocURL,
 		Observed: observed,
 	}
 }
 
-func readMemory(ctx context.Context) (availableGiB, totalGiB float64, err error) {
+// readMemory returns the installed total and, where the platform reports one, the amount
+// currently available. An available figure of zero means "not measured" — it is never
+// substituted with the total, which is how the old macOS path came to claim a 64 GiB
+// machine had 64 GiB free.
+func readMemory(ctx context.Context) (totalGiB, availableGiB float64, err error) {
 	if runtime.GOOS == "darwin" {
-		return readMemoryDarwin(ctx)
+		total, err := readMemoryDarwin(ctx)
+		return total, 0, err
 	}
 	return readMemoryProc()
 }
 
-func readMemoryProc() (availableGiB, totalGiB float64, err error) {
+func readMemoryProc() (totalGiB, availableGiB float64, err error) {
 	f, err := os.Open("/proc/meminfo")
 	if err != nil {
 		return 0, 0, err
@@ -114,18 +126,18 @@ func readMemoryProc() (availableGiB, totalGiB float64, err error) {
 	if totalKB == 0 {
 		return 0, 0, fmt.Errorf("/proc/meminfo did not report MemTotal")
 	}
-	return availableKB / 1024 / 1024, totalKB / 1024 / 1024, nil
+	return totalKB / 1024 / 1024, availableKB / 1024 / 1024, nil
 }
 
-func readMemoryDarwin(ctx context.Context) (availableGiB, totalGiB float64, err error) {
+func readMemoryDarwin(ctx context.Context) (totalGiB float64, err error) {
 	out, err := exec.CommandContext(ctx, "sysctl", "-n", "hw.memsize").Output()
 	if err != nil {
-		return 0, 0, err
+		return 0, err
 	}
 	bytes, err := strconv.ParseFloat(strings.TrimSpace(string(out)), 64)
 	if err != nil {
-		return 0, 0, err
+		return 0, err
 	}
-	total := bytes / bytesPerGiB
-	return total, total, nil
+	const bytesPerGiB = 1024 * 1024 * 1024
+	return bytes / bytesPerGiB, nil
 }

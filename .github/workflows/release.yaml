@@ -1,0 +1,45 @@
+name: Release
+
+# Tags only. A release is a deliberate act, not a side effect of merging: the tag is the
+# thing that decides a version exists, and nothing on main should be able to publish one.
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish dmp-lab
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # goreleaser builds the changelog from the commits since the previous tag, so it
+          # needs the full history and every tag. A shallow clone produces a release whose
+          # notes are silently empty.
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # The tag is what users install, so the tests run again here rather than trusting the
+      # merge that produced the commit. Cheap, and the alternative is publishing a binary
+      # nothing verified.
+      - name: Test
+        run: go test ./...
+
+      - name: Run goreleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          version: "~> v2"
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

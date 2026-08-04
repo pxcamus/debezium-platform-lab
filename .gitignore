@@ -18,6 +18,8 @@ examples
 
 # Rendered MkDocs output
 /site
+# goreleaser build output (`goreleaser release --snapshot`)
+/dist
 # Docs toolchain virtualenv, created on demand by `mage docs:serve` / `docs:build`
 /.venv
 

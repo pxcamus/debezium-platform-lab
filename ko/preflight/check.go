@@ -31,19 +31,24 @@ const (
 	StatusSkip
 )
 
-// String returns the lowercase name used in rendered output and in the JSON contract.
+// String returns the name used both in rendered output and in the JSON contract.
+//
+// The vocabulary describes what a finding means for the deployment rather than naming an
+// outcome: "blocker" rather than "fail", "note" rather than "info". Machines and people
+// read the same words, so a finding discussed from a JSON payload and one read off a
+// terminal cannot be described differently.
 func (s Status) String() string {
 	switch s {
 	case StatusPass:
-		return "pass"
+		return "passed"
 	case StatusInfo:
-		return "info"
+		return "note"
 	case StatusWarn:
-		return "warn"
+		return "warning"
 	case StatusFail:
-		return "fail"
+		return "blocker"
 	case StatusSkip:
-		return "skip"
+		return "skipped"
 	default:
 		return "unknown"
 	}
@@ -62,10 +67,18 @@ type Result struct {
 	Summary string
 	// Detail is optional context, such as the exact error a probed command produced.
 	Detail string
+	// Items is an enumeration rendered one entry per line, verbatim. Detail is prose and
+	// gets re-wrapped to the terminal, which would destroy any alignment; use Items where
+	// the layout carries meaning.
+	Items []string
 	// Remedy lists commands the operator can run verbatim. Preflight never runs them
 	// itself: a check that silently repairs the machine hides the fact that it was wrong,
 	// and the gap resurfaces on someone else's machine instead.
 	Remedy []string
+	// Link points at documentation with more to say than fits in a terminal. Set it per
+	// check and only when that is true — a link printed by default trains people to ignore
+	// links, and every finding here already carries its own fix.
+	Link string
 	// Observed carries the raw values behind the summary, for the JSON contract and for
 	// bug reports where the conclusion is less useful than the measurement.
 	Observed map[string]string
@@ -86,7 +99,9 @@ type Finding struct {
 	Status   Status            `json:"status"`
 	Summary  string            `json:"summary"`
 	Detail   string            `json:"detail,omitempty"`
+	Items    []string          `json:"items,omitempty"`
 	Remedy   []string          `json:"remedy,omitempty"`
+	Link     string            `json:"link,omitempty"`
 	Observed map[string]string `json:"observed,omitempty"`
 	DocURL   string            `json:"docUrl"`
 }
@@ -129,7 +144,9 @@ func Run(ctx context.Context, checks []Check) Report {
 			Status:   res.Status,
 			Summary:  res.Summary,
 			Detail:   res.Detail,
+			Items:    res.Items,
 			Remedy:   res.Remedy,
+			Link:     res.Link,
 			Observed: res.Observed,
 			DocURL:   fmt.Sprintf("%s#%s", DocBaseURL, c.ID),
 		})
