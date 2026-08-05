@@ -25,6 +25,10 @@ set -euo pipefail
 DPL_HELM_VERSION="${DPL_HELM_VERSION:-v4.2.3}"
 DPL_HELMFILE_VERSION="${DPL_HELMFILE_VERSION:-1.7.1}"
 
+# The justfile uses [group(...)], which needs just >= 1.27 — older packaged versions
+# (including Ubuntu's) fail to parse it, so this is pinned rather than taken from apt.
+DPL_JUST_VERSION="${DPL_JUST_VERSION:-1.58.0}"
+
 die() {
   echo "error: $*" >&2
   exit 1
@@ -108,7 +112,9 @@ install_helmfile() {
   fi
 
   step "helmfile ${DPL_HELMFILE_VERSION}"
-  local url="https://github.com/helmfile/helmfile/releases/download/v${DPL_HELMFILE_VERSION}/helmfile_${DPL_HELMFILE_VERSION}_linux_$(arch).tar.gz"
+  # Separate declaration: `local url=$(arch)` would mask a failing arch().
+  local url
+  url="https://github.com/helmfile/helmfile/releases/download/v${DPL_HELMFILE_VERSION}/helmfile_${DPL_HELMFILE_VERSION}_linux_$(arch).tar.gz"
   curl -fsSL "${url}" | tar -xz -C /tmp helmfile
   sudo install -m 0755 /tmp/helmfile /usr/local/bin/helmfile
   rm -f /tmp/helmfile
@@ -126,6 +132,27 @@ install_kind() {
   rm -f /tmp/kind
 }
 
+install_just() {
+  if command -v just >/dev/null; then
+    echo "just already installed"
+    return
+  fi
+
+  step "just ${DPL_JUST_VERSION}"
+  # just names its release assets by target triple, not the amd64/arm64 that arch() returns.
+  local target
+  case "$(uname -m)" in
+    x86_64) target=x86_64-unknown-linux-musl ;;
+    aarch64 | arm64) target=aarch64-unknown-linux-musl ;;
+    *) die "unsupported architecture for just: $(uname -m)" ;;
+  esac
+
+  local url="https://github.com/casey/just/releases/download/${DPL_JUST_VERSION}/just-${DPL_JUST_VERSION}-${target}.tar.gz"
+  curl -fsSL "${url}" | tar -xz -C /tmp just
+  sudo install -m 0755 /tmp/just /usr/local/bin/just
+  rm -f /tmp/just
+}
+
 summary() {
   cat <<EOF
 
@@ -136,6 +163,7 @@ summary() {
     helm      $(helm version --short 2>/dev/null)
     helmfile  $(helmfile --version 2>/dev/null)
     kind      $(kind --version 2>/dev/null)
+    just      $(just --version 2>/dev/null)
 
   Log out and back in so the docker group and PATH take effect, then:
 
@@ -153,6 +181,7 @@ main() {
   install_helm
   install_helmfile
   install_kind
+  install_just
   summary
 }
 

@@ -26,44 +26,10 @@ load_env_file ".env"
 : "${DPL_IMAGE_TAG:=nightly}"
 : "${DPL_IMAGE_TAG_CONDUCTOR:=nightly}"
 
-charts=(
-  deploy/charts/apicurio-registry
-  deploy/charts/cdc-dashboard
-  deploy/charts/http-server
-  deploy/charts/kafka-cluster
-  deploy/charts/kafka-connect
-  deploy/charts/mongodb-replica-set
-  deploy/charts/mssql
-  deploy/charts/postgresql-cluster
-)
-
-chart_values_args() {
-  local chart="$1"
-
-  case "${chart}" in
-    deploy/charts/cdc-dashboard)
-      printf '%s\n' "--values" "deploy/values/cdc-dashboard/local.yaml"
-      ;;
-    deploy/charts/mongodb-replica-set)
-      printf '%s\n' "--values" "deploy/values/mongodb/values.yaml"
-      ;;
-    deploy/charts/mssql)
-      printf '%s\n' "--values" "deploy/values/mssql/local.yaml"
-      ;;
-    deploy/charts/postgresql-cluster)
-      if [[ -s deploy/values/postgresql/values.yaml ]]; then
-        printf '%s\n' "--values" "deploy/values/postgresql/values.yaml"
-      fi
-      ;;
-    deploy/charts/apicurio-registry)
-      if [[ -s deploy/values/apicurio/local.yaml ]]; then
-        printf '%s\n' "--values" "deploy/values/apicurio/local.yaml"
-      fi
-      ;;
-  esac
-}
-
-# ... existing code ...
+# Charts are not linted individually: helmfile renders every release below, which
+# applies the same per-environment values layer the deployment uses, and pipes the
+# result through kubeconform. A per-chart loop lived here and validated the charts
+# against different values than production, so it was removed.
 
 echo "==> Helmfile lint"
 DPL_DEBEZIUM_VERSION="${DPL_DEBEZIUM_VERSION}" \

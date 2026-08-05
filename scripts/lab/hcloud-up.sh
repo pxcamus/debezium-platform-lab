@@ -54,7 +54,8 @@ fi
 readonly FIREWALL_NAME="${DPL_LAB_NAME}-fw"
 readonly STATE_DIR="${XDG_CACHE_HOME:-${HOME}/.cache}/dbz-lab"
 readonly STATE_FILE="${STATE_DIR}/${DPL_LAB_NAME}.env"
-readonly CLOUD_INIT="$(dirname "$0")/cloud-init.yaml"
+CLOUD_INIT="$(dirname "$0")/cloud-init.yaml"
+readonly CLOUD_INIT
 
 die() {
   echo "error: $*" >&2

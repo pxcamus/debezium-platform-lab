@@ -54,9 +54,12 @@ main() {
   # Written as `if` rather than `[[ … ]] && …`: under `set -e` a false test as the last
   # command of an AND-list exits the script, which would skip the firewall listing whenever
   # no server is present.
+  # sed, not ${var//…}: the substitution has to prefix every line, not just the first.
+  # shellcheck disable=SC2001
   if [[ -n "${servers}" ]]; then
     echo "${servers}" | sed 's/^/    server    /'
   fi
+  # shellcheck disable=SC2001
   if [[ -n "${firewalls}" ]]; then
     echo "${firewalls}" | sed 's/^/    firewall  /'
   fi

@@ -1,0 +1,51 @@
+name: Toolchain
+
+# Static checks over the shell + just toolchain. No cluster, no network beyond the
+# toolchain download — the whole job is seconds, so unlike Helm validation there is
+# no path filter: it always runs and always reports.
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  lint:
+    name: Shell and justfile checks
+    runs-on: ubuntu-latest
+
+    env:
+      # Keep in step with scripts/lab/bootstrap.sh, so CI and the lab machine parse
+      # the justfile with the same version. [group(...)] needs just >= 1.27.
+      JUST_VERSION: 1.58.0
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install just
+        run: |
+          curl -fsSL "https://github.com/casey/just/releases/download/${JUST_VERSION}/just-${JUST_VERSION}-x86_64-unknown-linux-musl.tar.gz" \
+            | tar -xz -C /tmp just
+          sudo install -m 0755 /tmp/just /usr/local/bin/just
+          just --version
+
+      # shellcheck ships on ubuntu-latest; pinning it is not worth an install step.
+      - name: shellcheck
+        run: shellcheck --version && shellcheck scripts/*.sh scripts/lab/*.sh scripts/lib/*.sh
+
+      - name: Shell syntax
+        run: |
+          for f in scripts/*.sh scripts/lab/*.sh scripts/lib/*.sh; do
+            bash -n "$f" || exit 1
+          done
+          echo "all scripts parse"
+
+      - name: justfile is formatted
+        run: just --fmt --check --unstable
+
+      - name: justfile parses
+        run: just --list
+
+      - name: Environment variables are consistent
+        run: ./scripts/validate-env.sh

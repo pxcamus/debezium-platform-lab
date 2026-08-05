@@ -104,4 +104,4 @@ sed 's/^\( *namespace: \)keycloak$/\1{{ .Release.Namespace }}/' "${tmp}" \
   > "${chart_dir}/templates/operator.yaml"
 rm -f "${tmp}"
 
-echo "==> Done. Review the changes with:  git diff --stat ${chart_dir#${repo_root}/}"
+echo "==> Done. Review the changes with:  git diff --stat ${chart_dir#"${repo_root}"/}"
