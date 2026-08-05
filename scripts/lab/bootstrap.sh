@@ -8,16 +8,16 @@
 #   scp scripts/lab/bootstrap.sh lab@<host>:
 #   ssh lab@<host> ./bootstrap.sh
 #
-# RUN THIS SECOND, NOT FIRST. The value of a fresh machine is that the preflight check has
-# something to find. Run the check on the bare box, note what it misses, fix the check —
-# then run this to get on with the deployment. A machine you bootstrapped immediately is a
-# machine that can no longer tell you anything.
+# A fresh machine is worth something: it is the only honest test of what the project
+# actually requires. Note what a bare box is missing before you run this — that list is the
+# real prerequisite list, and a machine you bootstrapped immediately can no longer tell you
+# anything.
 #
-# This is scaffolding. Once `doctor --fix` can install these itself, this script should
-# shrink to nothing and be deleted.
+# This is scaffolding, and should shrink as the toolchain gets a task runner that can
+# install its own prerequisites.
 #
-# Deliberately NOT done here: raising fs.inotify limits, and anything else the preflight
-# check is supposed to catch. Fixing those silently here would hide the checks being wrong.
+# Deliberately NOT done here: raising fs.inotify limits. Fixing that silently would hide a
+# requirement that belongs in the documentation.
 set -euo pipefail
 
 # Pinned to match .github/workflows/helm-validation.yaml, so the lab machine and CI
@@ -96,7 +96,7 @@ install_helm() {
   curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 |
     sudo DESIRED_VERSION="${HELM_VERSION}" bash
 
-  # helm-diff is what makes `mage helm:diff` useful; helmfile prompts for it otherwise.
+  # helm-diff is what makes `helmfile diff` useful; helmfile prompts for it otherwise.
   helm plugin install https://github.com/databus23/helm-diff >/dev/null 2>&1 ||
     echo "note: helm-diff plugin already present or unavailable"
 }
@@ -126,42 +126,7 @@ install_kind() {
   rm -f /tmp/kind
 }
 
-install_go() {
-  if command -v go >/dev/null || [[ -x /usr/local/go/bin/go ]]; then
-    echo "go already installed"
-    return
-  fi
-
-  step "Go"
-  # Resolved at runtime rather than pinned: a stale patch pin here breaks the download
-  # outright, and nothing in this project depends on an exact Go patch version.
-  local version
-  version="$(curl -fsSL https://go.dev/VERSION?m=text | head -n1)"
-  curl -fsSLo /tmp/go.tar.gz "https://go.dev/dl/${version}.linux-$(arch).tar.gz"
-  sudo rm -rf /usr/local/go
-  sudo tar -C /usr/local -xzf /tmp/go.tar.gz
-  rm -f /tmp/go.tar.gz
-
-  echo 'export PATH="${PATH}:/usr/local/go/bin:${HOME}/go/bin"' |
-    sudo tee /etc/profile.d/lab-go-path.sh >/dev/null
-  sudo chmod 0644 /etc/profile.d/lab-go-path.sh
-}
-
-install_mage() {
-  export PATH="${PATH}:/usr/local/go/bin:${HOME}/go/bin"
-
-  if command -v mage >/dev/null; then
-    echo "mage already installed"
-    return
-  fi
-
-  step "mage"
-  go install github.com/magefile/mage@latest
-}
-
 summary() {
-  export PATH="${PATH}:/usr/local/go/bin:${HOME}/go/bin"
-
   cat <<EOF
 
   Installed:
@@ -171,8 +136,6 @@ summary() {
     helm      $(helm version --short 2>/dev/null)
     helmfile  $(helmfile --version 2>/dev/null)
     kind      $(kind --version 2>/dev/null)
-    go        $(go version 2>/dev/null)
-    mage      $(mage --version 2>/dev/null | head -n1)
 
   Log out and back in so the docker group and PATH take effect, then:
 
@@ -190,8 +153,6 @@ main() {
   install_helm
   install_helmfile
   install_kind
-  install_go
-  install_mage
   summary
 }
 

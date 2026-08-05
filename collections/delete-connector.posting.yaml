@@ -1,3 +1,0 @@
-name: Delete connector
-method: DELETE
-url: http://kafka-connect.platform.debezium.local/connectors/demo-connector

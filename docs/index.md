@@ -14,6 +14,10 @@ minutes and then point it at your own data.
     [repository README](https://github.com/pxcamus/debezium-platform-lab) is the
     authoritative instruction set.
 
+!!! info "Community project"
+
+    Not affiliated with, or endorsed by, the Debezium project or Red Hat.
+
 ## What you actually get
 
 A running platform where you define pipelines by filling in forms:
@@ -75,4 +79,4 @@ deployment running comfortably on less, that is useful to hear about.
 <!-- TODO: add the architecture diagram and a terminal recording of a full deploy. -->
 <!-- TODO: replace the figures above with measurements once a deployment has been run with
      memory instrumented. Revisit again once the lab profile drops Kafka from the default
-     path. `dmp-lab doctor` links here from its memory check. -->
+     path. Whatever replaces the preflight checks should link here from its memory check. -->

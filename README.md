@@ -1,14 +1,23 @@
 # debezium-platform-lab
 
-Reproducible, environment-agnostic automation for running the [Debezium Platform](https://debezium.io/documentation/reference/stable/operations/debezium-platform.html) on Kubernetes — the same [**mage**](https://magefile.org/) targets and [**helmfile**](https://helmfile.readthedocs.io/) releases take you from a local [Kind](https://kind.sigs.k8s.io/) cluster to AWS or a self-hosted k3s box.
+Reproducible, environment-agnostic automation for running the [Debezium Platform](https://debezium.io/documentation/reference/stable/operations/debezium-platform.html) on Kubernetes — the same [**helm**](https://helm.sh/) charts and [**helmfile**](https://helmfile.readthedocs.io/) releases take you from a local [Kind](https://kind.sigs.k8s.io/) cluster to AWS or a self-hosted k3s box.
 
 [![Helm validation](https://github.com/pxcamus/debezium-platform-lab/actions/workflows/helm-validation.yaml/badge.svg)](https://github.com/pxcamus/debezium-platform-lab/actions/workflows/helm-validation.yaml)
 
-It provisions a change-data-capture (CDC) stack — Kafka (Strimzi), PostgreSQL (CloudNativePG), MongoDB, optionally SQL Server, the Debezium Operator and the Debezium Platform — seeds demo databases, and drives the Debezium Platform HTTP API to create connections, sources, destinations and pipelines idempotently.
+> A community project. Not affiliated with, or endorsed by, the Debezium project or Red Hat.
+
+It provisions a change-data-capture (CDC) stack — Kafka (Strimzi), PostgreSQL (CloudNativePG), MongoDB, optionally SQL Server, the Debezium Operator and the Debezium Platform — and ships the JSON payloads that define connections, sources, destinations and pipelines for the Debezium Platform API.
 
 Defaults target a local Kind cluster. Passwords in the Helm charts and `.env.example` are non-secret demo values.
 
 **📖 Documentation: [lab.1int.io](https://lab.1int.io/)** — start with [Get running](https://lab.1int.io/getting-started/) for the guided walkthrough, or [Troubleshooting](https://lab.1int.io/troubleshooting/) when something fails. The quick start below is the condensed version of the same path.
+
+> **Rebuild in progress.** The Go task runner (`mage`) and the `dmp-lab` CLI were removed while the
+> toolchain moves to [`just`](https://just.systems/). Deployment is unaffected — it was always
+> `helmfile` underneath, and the commands below are what the mage targets ran. Database seeding and
+> scenario application had no other implementation and are temporarily unavailable; the SQL and
+> JavaScript seed scripts (`resources/data/`) and the DMP payloads (`data-pipelines/config/`) are untouched
+> and still describe what those steps did.
 
 ---
 
@@ -16,8 +25,6 @@ Defaults target a local Kind cluster. Passwords in the Helm charts and `.env.exa
 
 | Tool | Purpose |
 |---|---|
-| [Go](https://go.dev/) 1.26+ | build/run mage targets |
-| [mage](https://magefile.org/#installation) | task runner |
 | [helmfile](https://helmfile.readthedocs.io/en/latest/#installation) + [helm](https://helm.sh/) | chart orchestration (helm-diff plugin recommended) |
 | [kind](https://kind.sigs.k8s.io/) | local Kubernetes cluster |
 | [kubectl](https://kubernetes.io/docs/tasks/tools/) | cluster access |
@@ -39,84 +46,69 @@ cp .env.example .env
 # 2. Create the local cluster
 kind create cluster --name dmp --config deploy/clusters/kind/kind-ingress.yaml
 
-# 3. Deploy the stack (infra → operator → platform), ordered by dependency
-mage helm:all
-
-# 4. Seed the demo databases
-mage data:pg       # PostgreSQL ecommerce schema + data
-mage data:mongo    # MongoDB ecommerce collections + data
-
-# 5. Create Debezium Platform resources for a scenario
-mage scenario:mongodbRs
+# 3. Deploy the stack, ordered by dependency. Each operator is applied and
+#    established before the resources that depend on its CRDs.
+export HELMFILE="helmfile --file deploy/helmfile.yaml.gotmpl"
+$HELMFILE --selector app=strimzi-cluster-operator    apply
+$HELMFILE --selector app=cnpg-operator               apply
+$HELMFILE --selector app=mongodb-community-operator  apply
+$HELMFILE --selector infra=true                      apply --skip-diff-on-install
+$HELMFILE --selector app=debezium-operator           apply
+$HELMFILE --selector app=debezium-platform           apply
 ```
 
-List every available target with:
+Environment variables are read from `.env`, so run these from the repository root with the file in
+place — `scripts/with-env.sh` wraps a command with the same resolution if you prefer.
 
-```bash
-mage -l
-```
+Seeding the demo databases and creating the platform's pipelines were `mage data:*` and
+`mage scenario:*`; both are pending the toolchain rebuild.
 
 ---
 
 ## Known gaps
 
-- **Only the MongoDB replica-set scenario (`scenario:mongodbRs`) is wired up today**, so `scenario:all` currently runs just that one. The `postgres-basic` and `sqlserver-basic` directories under `ko/scenarios/` contain payloads but are not yet exposed as targets.
-- **SQL Server requires amd64.** Microsoft ships no arm64 SQL Server image (and Azure SQL Edge, the historical arm64 stand-in, was retired 2025-09-30). The `mssql` release is *not* part of `mage helm:all` — it is applied explicitly (`helmfile --file deploy/helmfile.yaml.gotmpl --selector app=mssql apply`) — so this only affects SQL Server work. Use an amd64 cluster (`CLUSTER_TYPE=k3s` on a cloud box) for SQL Server work.
+- **Seeding and scenarios have no runner right now.** `resources/data/` (PostgreSQL SQL, MongoDB JS) and `data-pipelines/config/` (per-scenario `scenario.yaml` + JSON payloads) are intact, but nothing in the repository executes them since the Go code was removed.
+- **Only the MongoDB replica-set scenario was ever wired up.** The `postgres-basic` and `sqlserver-basic` directories under `data-pipelines/config/` contain payloads that were never exposed as targets.
+- **SQL Server requires amd64.** Microsoft ships no arm64 SQL Server image (and Azure SQL Edge, the historical arm64 stand-in, was retired 2025-09-30). The `mssql` release is not part of the sequence above — apply it explicitly (`helmfile --file deploy/helmfile.yaml.gotmpl --selector app=mssql apply`) — so this only affects SQL Server work. Use an amd64 cluster (`CLUSTER_TYPE=k3s` on a cloud box) for it.
 - **Debezium Platform release images are amd64-only** (`platform-conductor` / `platform-stage` version tags, checked 2026-07); only the `nightly` tag is multi-arch. `deploy/environment/versions.env` pins `nightly` for this reason. Everything else on the default path — Strimzi operator and Kafka, MongoDB operator/server, CloudNativePG and PostgreSQL, ingress-nginx, the Debezium Operator — publishes amd64+arm64.
 
 ---
 
 ## Configuration
 
-**All configuration is via environment variables**, loaded from two layered files: `.env` (git-ignored — secrets and host-specific overrides) takes precedence, and [`deploy/environment/versions.env`](deploy/environment/versions.env) (shared, non-sensitive version pins) is loaded as a fallback. Both mage and `scripts/validate-helm.sh` resolve this way, so **version pins live in `versions.env` only** — `.env` doesn't duplicate them and a CI checkout can run from `versions.env` alone. Start from [`.env.example`](.env.example), which documents every variable. The most important ones:
+**All configuration is via environment variables**, loaded from two layered files: `.env` (git-ignored — secrets and host-specific overrides) takes precedence, and [`deploy/environment/versions.env`](deploy/environment/versions.env) (shared, non-sensitive version pins) is loaded as a fallback. `scripts/with-env.sh` and `scripts/validate-helm.sh` both resolve this way, so **version pins live in `versions.env` only** — `.env` doesn't duplicate them and a CI checkout can run from `versions.env` alone.
+
+[`.env.example`](.env.example) is the minimum needed for the local Kind demo: variables that have no default anywhere, or whose default is wrong when you run from your own machine. The full set is documented in [`docs/reference/environment.md`](docs/reference/environment.md).
 
 | Variable | Purpose | Default |
 |---|---|---|
-| `DBZ_VERSION` | Debezium Helm chart version | **required** |
+| `DBZ_VERSION` | Debezium Helm chart version | **required** (from `versions.env`) |
 | `DBZ_ENV` | Deployment environment; selects `deploy/values/<component>/<DBZ_ENV>.yaml.gotmpl` | `local` |
-| `DBZ_DOMAIN` | Base DNS zone; every ingress host is `<component>.${DBZ_DOMAIN}` (e.g. `dmp.`, `apicurio.`, `kafbat.`, `registry.`) | `platform.debezium.local` |
+| `DBZ_DOMAIN` | Base DNS zone; every ingress host is `<component>.${DBZ_DOMAIN}` (e.g. `dmp.`, `apicurio.`, `kafbat.`, `registry.`) | **required** — rendered with `requiredEnv` |
 | `DBZ_NAMESPACE` | Debezium Platform namespace | `dmp` |
 | `CLUSTER_TYPE` | Cluster provider: `kind` or `k3s` | `kind` |
 | `DMP_RESOURCE_PREFIX` / `DMP_ENVIRONMENT` | Prefix for deterministic DMP resource names | — |
 | `KAFKA_DMP_BOOTSTRAP_SERVERS` | Kafka bootstrap for DMP payloads | — |
-| `MONGODB_*` / `POSTGRESQL_*` / `SQLSERVER_*` | DB connection config | see `.env.example` |
-| `LOG_LEVEL` | `debug` \| `info` \| `warn` \| `error` | `info` |
 
 Known `DBZ_ENV` values in this repo: `local`, `homelab` (self-hosted k3s + public TLS), `aws`, `hetzner`. Each has a matching values file under `deploy/values/<component>/`.
 
-DMP JSON payloads use `${ENV_VAR}` syntax that is expanded from the environment at load time.
+DMP JSON payloads use `${ENV_VAR}` syntax, expanded from the environment when the payload is loaded.
 
 ---
 
 ## Common tasks
 
-```bash
-# Cluster (remote k3s lifecycle; requires CLUSTER_TYPE=k3s + K3S_* vars)
-mage cluster:recreate
-
-# Helm
-mage helm:all            # apply everything in dependency order
-mage helm:infra          # infra releases only (label infra=true)
-mage helm:dbzOperator    # Debezium Operator only
-mage helm:platform       # Debezium Platform only
-mage helm:diff           # preview pending changes
-mage helm:platformDestroy / mage helm:allDestroy
-
-# Data seeding
-mage data:mongo / mage data:resetMongo
-mage data:pg    / mage data:resetPg
-
-# DMP scenarios
-mage scenario:mongodbRs   # MongoDB replica-set → Kafka
-mage scenario:all         # every wired scenario
-```
-
-Helm releases are selectable by label directly, too:
+All releases are selectable by label:
 
 ```bash
 helmfile --file deploy/helmfile.yaml.gotmpl --selector infra=true apply
 helmfile --file deploy/helmfile.yaml.gotmpl --selector app=debezium-platform apply
+helmfile --file deploy/helmfile.yaml.gotmpl --selector app=debezium-operator destroy
+helmfile --file deploy/helmfile.yaml.gotmpl diff              # preview pending changes
 ```
+
+Labels in use include `infra=true` (operators, databases, ingress) and `app=<release-name>` for every
+individual release — see [`deploy/helmfile.yaml.gotmpl`](deploy/helmfile.yaml.gotmpl).
 
 ---
 
@@ -133,19 +125,6 @@ Runs `helm lint` / `helm template` per chart and `helmfile lint` / `template` pi
 ## Repository layout
 
 ```
-main.go                  # Standalone entry point (MongoDB setup)
-magefile.go              # Primary task runner (mage targets)
-
-ko/                      # Core Go library (module: dbz-mage, imports dbz-mage/ko/...)
-├── cluster/             # K8s cluster lifecycle (Kind, K3s)
-├── runner/              # Command execution (Local, SSH)
-├── source/              # Data sources (MongoDB, PostgreSQL)
-├── automation/          # Env loading (.env), exec helpers
-├── dmp/                 # Debezium Platform HTTP API client + resource resolver
-└── scenarios/           # DMP scenario manifests + JSON payloads
-    ├── common/          # Shared connections, destinations, transforms
-    └── <scenario>/      # Per-scenario scenario.yaml + payloads/
-
 deploy/
 ├── helmfile.yaml.gotmpl # All Helm releases, ordered by dependency
 ├── charts/              # Custom charts (kafka-cluster, postgresql-cluster, mssql, ...)
@@ -153,12 +132,18 @@ deploy/
 ├── clusters/            # Kind cluster configs
 └── environment/         # versions.env — shared version pins
 
+data-pipelines/config/   # DMP scenario manifests + JSON payloads
+├── common/              # Shared connections, destinations, transforms
+└── <scenario>/          # Per-scenario scenario.yaml + payloads/
+
 resources/               # SQL / MongoDB seed scripts, standalone DMP payloads
 certs/                   # Optional TLS (see below)
-scripts/validate-helm.sh # Offline chart validation
+docs/                    # MkDocs sources for lab.1int.io
+scripts/
+├── validate-helm.sh     # Offline chart validation
+├── with-env.sh          # Runs a command with .env + versions.env resolved
+└── lab/                 # Lab VM provisioning
 ```
-
-`collections/` (Posting HTTP collections for the DMP API) is auxiliary/reference material.
 
 ---
 
@@ -184,8 +169,7 @@ The webhook release is gated on `DBZ_ENV=homelab`, so it is not installed for `l
 
 ## Notes & gotchas
 
-- **Module name:** the Go module is `dbz-mage` (unchanged by the repo name). Imports use `dbz-mage/ko/...`.
-- **No `go build` target:** `magefile.go` uses the `//go:build mage` tag and only compiles via `mage`. `main.go` is a separate standalone entry point.
-- **DMP base URL:** `ko/dmp/http_client.go` derives `http://dmp.${DBZ_DOMAIN}` (or `DMP_BASE_URL` if set); ingress hosts across the platform are `<component>.${DBZ_DOMAIN}`, set via the `DBZ_DOMAIN` base zone.
-- **Idempotent DMP resources:** the resolver does find-by-name before create, so re-running a scenario reuses existing resources.
-- **Commented-out releases:** `helmfile.yaml.gotmpl` and `magefile.go` contain disabled blocks for optional/retired components (Apicurio, CDC dashboard, Kafka Connect). Don't enable without checking the dependency chain.
+- **`DBZ_DOMAIN` has no default at render time.** The values templates use `requiredEnv "DBZ_DOMAIN"`, so helmfile fails outright if it is unset. Add matching `/etc/hosts` entries for the local demo.
+- **Exported shell variables win over `.env`.** Both files are loaded without overriding what is already in the environment, so a stale exported `DBZ_*` silently beats the file.
+- **Idempotent DMP resources:** the payloads are named deterministically (`${DMP_RESOURCE_PREFIX}-${DMP_ENVIRONMENT}-<type>`) so a resource can be found by name and reused rather than duplicated.
+- **Commented-out releases:** `helmfile.yaml.gotmpl` contains disabled blocks for optional/retired components (Apicurio, CDC dashboard, Kafka Connect). Don't enable without checking the dependency chain.

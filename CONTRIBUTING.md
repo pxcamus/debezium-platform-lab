@@ -8,17 +8,23 @@ land in `main`.
 ## Development setup
 
 Install the tooling listed in the [README prerequisites](README.md#prerequisites)
-(Go 1.26+, mage, helm + helmfile, kind, kubectl, Docker), then:
+(helm + helmfile, kind, kubectl, Docker), then:
 
 ```bash
-cp .env.example .env      # required — mage targets and validate-helm.sh load it
-mage -l                   # list available targets
+cp .env.example .env       # host-specific values and secrets
+scripts/validate-helm.sh   # offline check that every chart still renders
 ```
 
-`.env` is git-ignored and **required**: mage targets call `automation.LoadEnv()`
-and `scripts/validate-helm.sh` sources it, so without it required variables such
-as `DBZ_VERSION` are missing. The passwords in the Helm charts and `.env.example`
-are non-secret demo values — never commit real secrets.
+`.env` is git-ignored. It layers over
+[`deploy/environment/versions.env`](deploy/environment/versions.env), which
+carries the shared version pins, so a checkout without `.env` still renders —
+that is how CI runs. Put host-specific values and secrets in `.env` and version
+pins in `versions.env`, never the reverse. The passwords in the Helm charts and
+`.env.example` are non-secret demo values — never commit real secrets.
+
+> **No Go, no `mage`.** The Go library, the mage task runner and the `dmp-lab`
+> CLI were removed pending a move to [`just`](https://just.systems/). This
+> repository is charts, helmfile releases, JSON payloads, shell and docs.
 
 ## Branching and pull requests
 
@@ -48,37 +54,31 @@ Suggested branch/commit prefixes: `feat/`, `fix/`, `docs/`, `chore/`, `refactor/
 Run the same checks CI runs, locally:
 
 ```bash
-gofmt -l .                 # should print nothing
-go vet ./...
-go build ./...
-go run github.com/magefile/mage -l   # compiles the mage-tagged magefile
 scripts/validate-helm.sh   # offline Helm chart + helmfile validation
 ```
 
 CI enforces these on every PR:
 
-- **Go** ([`.github/workflows/go.yaml`](.github/workflows/go.yaml)) — gofmt,
-  `go vet`, `go build`, `go mod tidy` check, and a magefile compile, on any `*.go`
-  / `go.mod` / `go.sum` change.
 - **Helm validation** ([`.github/workflows/helm-validation.yaml`](.github/workflows/helm-validation.yaml)) —
   `helm lint` / `template` and `helmfile lint` / `template` through `kubeconform`,
   on any change under `deploy/`.
+- **Docs** ([`.github/workflows/docs.yaml`](.github/workflows/docs.yaml)) — MkDocs
+  builds `docs/` and publishes to [lab.1int.io](https://lab.1int.io/).
 
-## Coding conventions
+## Conventions
 
-These match the existing codebase (see [`CLAUDE.md`](CLAUDE.md) for the full set):
+See [`AGENTS.md`](AGENTS.md) for the full set:
 
-- **`NewFromEnv()`** factory pattern: read env vars, build config, call `New()`.
-- Env access via `automation.Env(name, fallback)` /
-  `automation.RequiredEnv(name)`; paths via `automation.ExpandPath(path)`.
-- Structured logging with `log/slog` via `slog.Default()`.
-- Wrap errors with `fmt.Errorf("...: %w", err)`.
-- No inline comments — only Go doc comments on exported symbols.
+- Values files are per-component and per-environment:
+  `deploy/values/<component>/<DBZ_ENV>.yaml.gotmpl`.
+- Prefer adding a values layer over forking a chart.
+- Version pins go in `versions.env`, secrets and host overrides in `.env`.
 - All DMP JSON payloads must have a `"name"` field; `${ENV_VAR}` in payloads is
-  expanded at load time.
+  expanded at load time, and a missing variable becomes an empty string rather
+  than an error.
 
 ## Reporting issues
 
-Open a GitHub issue with enough detail to reproduce: the mage target or command
-you ran, your `DBZ_ENV` / `CLUSTER_TYPE`, and the relevant log output (set
-`LOG_LEVEL=debug` for more). Please redact any real secrets.
+Open a GitHub issue with enough detail to reproduce: the command you ran, your
+`DBZ_ENV` / `CLUSTER_TYPE`, and the relevant output. Please redact any real
+secrets.

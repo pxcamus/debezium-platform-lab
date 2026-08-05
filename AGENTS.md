@@ -2,135 +2,139 @@
 
 ## Project Overview
 
-Go-based automation for deploying and managing the Debezium Platform on Kubernetes. Uses **mage** (Go task runner) as the build system.
+Helm charts and helmfile releases for deploying and managing the Debezium Platform on Kubernetes,
+plus the JSON payloads that describe Debezium Platform pipelines.
 
-Module path: `dbz-mage` (imported as `dbz-mage/ko/...`)
+**There is no application code in this repository.** The Go library, the `mage` task runner and the
+`dmp-lab` CLI were removed while the toolchain moves to [`just`](https://just.systems/); everything
+here is now YAML, JSON, shell and documentation. Do not reintroduce Go without being asked.
 
 ## Build & Run
 
 ```bash
-# List available mage targets
-mage -l
+# Apply releases in dependency order (what `mage helm:all` used to run)
+export HELMFILE="helmfile --file deploy/helmfile.yaml.gotmpl"
+$HELMFILE --selector app=strimzi-cluster-operator    apply
+$HELMFILE --selector app=cnpg-operator               apply
+$HELMFILE --selector app=mongodb-community-operator  apply
+$HELMFILE --selector infra=true                      apply --skip-diff-on-install
+$HELMFILE --selector app=debezium-operator           apply
+$HELMFILE --selector app=debezium-platform           apply
 
-# Run a mage target
-mage cluster:recreate
-mage helm:all
-mage helm:dbzOperator
-mage helm:platform
-mage helm:diff
-mage data:mongo
-mage data:pg
-mage scenario:mongodbRs
+# Preview pending changes
+helmfile --file deploy/helmfile.yaml.gotmpl diff
+
+# Validate every chart without a cluster
+scripts/validate-helm.sh
 ```
 
-**There is no `go build` target** — the `magefile.go` uses `//go:build mage` tag so it only compiles via `mage`. The `main.go` is a standalone entry point that runs MongoDB setup directly (not the primary workflow).
+`scripts/with-env.sh` wraps a command with `.env` + `versions.env` resolved, which is what the mage
+targets did before running a child process.
 
-**There are no test files, no lint config, no CI configs** in this repository.
+CI is two GitHub Actions workflows: `helm-validation.yaml` (chart lint/template/kubeconform on
+changes under `deploy/`) and `docs.yaml` (MkDocs build and deploy to lab.1int.io).
 
 ## Architecture
 
 ```
-main.go                  # Standalone entry point (MongoDB setup)
-magefile.go              # Task runner (mage targets)
-
-ko/                      # Core library (import path: dbz-mage/ko/...)
-├── cluster/             # K8s cluster lifecycle (Kind, K3s)
-├── runner/              # Command execution (Local, SSH via Runner interface)
-├── k8s/                 # Kubernetes client-go wrapper
-├── source/              # Data sources (Source interface → MongoDB, PostgreSQL)
-├── automation/          # Env loading (.env), command exec helpers
-├── dmp/                 # Debezium Platform HTTP API client + resource resolver
-└── scenarios/           # DMP scenario management (legacy path)
-
 deploy/
-├── helmfile.yaml.gotmpl # Helmfile defining all releases
-├── charts/              # Custom Helm charts (kafka-cluster, postgresql-cluster, etc.)
+├── helmfile.yaml.gotmpl # All releases, ordered by dependency, selectable by label
+├── charts/              # Custom Helm charts (kafka-cluster, postgresql-cluster, mssql, ...)
 ├── values/              # Per-component, per-environment values files
 ├── clusters/            # Kind cluster configs
+├── environment/         # versions.env — shared version pins
 └── images/              # Dockerfiles (kafka-connect)
+
+data-pipelines/config/   # DMP scenario manifests + JSON payloads (data, not code)
+├── common/              # Shared DMP payloads (connections, destinations, transforms)
+└── <scenario-name>/
+    ├── scenario.yaml
+    └── payloads/
 
 resources/
 ├── data/                # SQL seed scripts, MongoDB JS seed scripts
 └── *.json               # Standalone DMP payload definitions
 
-ko/scenarios/
-├── common/              # Shared DMP payloads (connections, destinations)
-└── <scenario-name>/     # Per-scenario yaml manifest + JSON payloads
-    ├── scenario.yaml
-    └── payloads/
+certs/                   # Optional homelab TLS manifests (ClusterIssuers + Certificate)
+docs/                    # MkDocs sources for lab.1int.io
+scripts/
+├── validate-helm.sh     # Offline chart validation
+├── with-env.sh          # Runs a command with .env + versions.env resolved
+├── vendor-keycloak-operator.sh
+└── lab/                 # Lab VM provisioning
 ```
 
-## Key Interfaces
-
-- **`cluster.Cluster`** — `Recreate`, `Delete`, `UseContext` — implemented by `Kind` and `K3s`
-- **`runner.Runner`** — `Run`, `Output`, `CopyFrom` — implemented by `Local` and `SSH`
-- **`source.Source`** — `Wait`, `Setup`, `Populate`, `Reset`, `Close` — implemented by `MongoDB` and `PostgreSQL`
-- **`dmp.Resource`** — `GetKey`, `GetFile`, `GetRefs`, `GetType` — implemented by connection/source/destination/pipeline resource types
+`data-pipelines/config/` was `ko/scenarios/` while the Go library lived in `ko/`; older commits,
+issues and the published tags still use the old path.
 
 ## Environment & Configuration
 
-**All configuration is via environment variables**, loaded from `.env` by `automation.LoadEnv()` via `godotenv`. Every mage target calls this first.
+**All configuration is via environment variables**, layered and first-wins: `.env` (git-ignored —
+secrets and host-specific overrides) is read first, then `deploy/environment/versions.env` (shared,
+non-sensitive version pins) fills the gaps. Both files are optional; a checkout with only
+`versions.env` works, which is how CI runs. **Version pins live in `versions.env` only** — never
+duplicate them into `.env` or `.env.example`.
+
+`.env.example` is deliberately minimal: it carries only variables that have no default anywhere, or
+whose default is wrong when run from a workstation rather than in-cluster. The exhaustive list
+belongs in `docs/reference/environment.md`.
 
 ### Critical env vars
 
 | Variable | Purpose | Default |
 |---|---|---|
-| `DBZ_ENV` | Deployment environment | `local` |
-| `DBZ_VERSION` | Debezium helm chart version | required |
+| `DBZ_ENV` | Deployment environment; selects `deploy/values/<component>/<DBZ_ENV>.yaml.gotmpl` | `local` |
+| `DBZ_DOMAIN` | Base DNS zone; ingress hosts are `<component>.${DBZ_DOMAIN}` | **none** — rendered with `requiredEnv`, so helmfile fails if unset |
+| `DBZ_VERSION` | Debezium helm chart version | from `versions.env` |
 | `DBZ_NAMESPACE` | Debezium namespace | `dmp` |
 | `CLUSTER_TYPE` | Cluster provider (`kind` or `k3s`) | `kind` |
 | `DMP_RESOURCE_PREFIX` / `DMP_ENVIRONMENT` | Resource naming prefix | used in JSON payloads |
 | `KAFKA_DMP_BOOTSTRAP_SERVERS` | Kafka bootstrap servers | used in JSON payloads |
-| `MONGODB_*` / `POSTGRESQL_*` | Database connection config | see `client.go` defaults |
-| `LOG_LEVEL` | Logging level | `info` |
+
+Known `DBZ_ENV` values: `local`, `homelab`, `aws`, `hetzner`.
 
 ### JSON payload environment expansion
 
-JSON payload files use `${ENV_VAR}` syntax — `os.ExpandEnv()` replaces these at load time. This applies to files in `ko/scenarios/common/` and `ko/scenarios/<name>/payloads/`.
-
-## DMP Resource Management Flow
-
-The `dmp.ResourceResolver` (in `ko/dmp/scenarios_common.go`) manages Debezium Platform resources idempotently:
-
-1. **`EnsureCommonConnections`** — Loads JSON from `ko/scenarios/common/connections/<key>.json`, validates via DMP API, creates if not exists
-2. **`EnsureCommonDestinations`** — Loads from `ko/scenarios/common/destinations/<key>.json`, links to resolved connection ID
-3. **`EnsureScenarioSources`** — Loads from `ko/scenarios/<scenario>/payloads/`, injects connection ref
-4. **`EnsureScenarioPipelines`** — Loads from `ko/scenarios/<scenario>/payloads/`, injects source + destination refs
-
-All operations do FindByName first — if a resource with the deterministic name already exists, it is reused rather than recreated.
+DMP payload files use `${ENV_VAR}` syntax, expanded from the environment when a payload is loaded.
+A missing variable expands to an empty string rather than raising an error, so an unset value
+produces a malformed payload rather than a failure — this applies to `data-pipelines/config/common/`
+and `data-pipelines/config/<name>/payloads/`.
 
 ### Resource naming convention
 
-Resources get deterministic names derived from their JSON payload's `name` field (with env var expansion). The pattern is typically: `${DMP_RESOURCE_PREFIX}-${DMP_ENVIRONMENT}-<resource-type>`.
+DMP resources are named deterministically from the payload's `name` field after expansion, typically
+`${DMP_RESOURCE_PREFIX}-${DMP_ENVIRONMENT}-<resource-type>`. The convention exists so a resource can
+be found by name and reused rather than duplicated. Every payload MUST have a `"name"` key.
 
 ## Helm Deployments
 
-Controlled by `deploy/helmfile.yaml.gotmpl`. Deployments are ordered by `needs` dependencies and selectable by labels:
+Controlled by `deploy/helmfile.yaml.gotmpl`. Releases are selectable by label — `infra=true` for
+operators, databases and ingress; `app=<release-name>` for an individual release:
 
 ```bash
 helmfile --file deploy/helmfile.yaml.gotmpl --selector app=strimzi-cluster-operator apply
 helmfile --file deploy/helmfile.yaml.gotmpl --selector infra=true apply
 ```
 
-Comment-out blocks in the helmfile (like `kafka-connect`, `cdc-dashboard`, `apicurio-registry`) indicate components that are optional or retired.
+Helm has no `needs:`, so operator-then-custom-resource ordering is expressed by applying separate
+selectors in sequence (see Build & Run above), not by a single `apply`.
 
-The `mage helm:all` applies releases in dependency order using separate helmfile invocations with different selectors.
+Releases carrying a cert-manager `Certificate` must not roll back on failure: `helm --wait` blocks
+on issuance, and if DNS-01 lags past the timeout the default rollback would uninstall an otherwise
+healthy release. The Keycloak release documents this in place.
 
-## Code Patterns & Conventions
+## Conventions
 
-- **`NewFromEnv()`** is the standard factory pattern — reads env vars, builds config, calls `New()`
-- **`automation.Env(name, fallback)`** provides env vars with defaults; `RequiredEnv(name)` fails if missing
-- **`automation.ExpandPath(path)`** handles `~/` prefix and `${VAR}` expansion for paths
-- **Structured logging** uses `log/slog` via `slog.Default()`; each component has a `logger()` method that falls back to the default logger
-- **Error wrapping** uses `fmt.Errorf("...: %w", err)` consistently
-- **No comments in code** unless they are Go doc comments on exported functions
+- Values files are per-component and per-environment: `deploy/values/<component>/<DBZ_ENV>.yaml.gotmpl`
+- Prefer adding a values layer over forking a chart
+- Version pins go in `versions.env`, secrets in `.env`, never the reverse
+- Run `scripts/validate-helm.sh` before proposing chart changes
 
 ## Gotchas
 
-1. **Module name mismatch**: The Go module is `dbz-mage` but the directory is `oneint-k8s-mgt`. Imports use `dbz-mage/ko/...`.
-2. **DMP base URL resolution**: `ko/dmp/http_client.go` resolves the base URL as `DMP_BASE_URL` → `http://dmp.${DBZ_DOMAIN}` → `http://dmp.platform.debezium.local`. Override per-instance via the `BaseURL` field on the client struct.
-3. **Mage build tag**: The magefile has `//go:build mage` — it won't compile with regular `go build`. Use `mage` to run targets.
-4. **No idempotent apply for pipelines**: The `scenario:mongodbRs` mage target goes through `mongoRsBasic()` which uses `dmp.ResourceResolver` — idempotent. But the `ko/scenarios/service.go` path does NOT do FindByName (marked as TODO), so repeated calls there would create duplicates.
-5. **JSON payloads expect `name` field**: All DMP JSON payloads MUST have a `"name"` key, or the loader will error.
-6. **Commented-out code**: Both `magefile.go` and `helmfile.yaml.gotmpl` contain commented-out sections for retired/optional components (Apicurio, CDC dashboard, Kafka Connect). Don't uncomment without understanding the dependencies.
-7. **Env loading is layered**: `automation.LoadEnv()` loads `.env` (secrets + host overrides) first, then `deploy/environment/versions.env` (shared version pins) as a fallback; `.env` values win, `versions.env` fills gaps. Version pins live in `versions.env` only. Both files are optional.
+1. **Exported shell variables beat both env files.** Loading is non-overriding, so a stale exported `DBZ_*` in your shell silently wins over `.env` and `versions.env`.
+2. **`DBZ_DOMAIN` has no default at render time** despite what older docs claimed — `deploy/values/dmp/local.yaml.gotmpl` uses `requiredEnv`.
+3. **Commented-out releases**: `helmfile.yaml.gotmpl` contains disabled blocks for optional or retired components (Apicurio, CDC dashboard, Kafka Connect). Don't enable without understanding the dependency chain.
+4. **Seeding and scenarios have no runner.** `resources/data/` and `data-pipelines/config/` are intact data with nothing in the repository to execute them, pending the `just` + JBang rebuild.
+5. **`certs/` is applied by hand** (`kubectl apply -f certs/`) and is the only Kubernetes resource set outside both Helm and helmfile. It is homelab-only and slated to be folded into a gated release.
+6. **`.env` and `.env.example` may be unreadable to tooling** that denies dotenv paths; read the committed version with `git show HEAD:.env.example` instead.

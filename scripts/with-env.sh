@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
-# Run any command with the project env loaded, the same way mage targets do.
+# Run any command with the project env loaded.
 #
-# mage calls automation.LoadEnv() (deploy/environment/versions.env then .env,
-# .env winning). Raw helmfile / kubectl / skopeo don't, so they render the
+# deploy/environment/versions.env supplies the shared pins and .env overrides
+# them. Raw helmfile / kubectl / skopeo read neither, so they render the
 # committed defaults instead of your host overrides. Front them with this:
 #
 #   scripts/with-env.sh helmfile --file deploy/helmfile.yaml.gotmpl \
 #     --selector app=debezium-platform template
 #   scripts/with-env.sh kubectl get pods -n "${DBZ_NAMESPACE}"
 #
-# Run from the repo root (paths below are repo-relative, matching mage/helmfile).
+# Run from the repo root (paths below are repo-relative, matching helmfile).
 set -euo pipefail
 
 load_env_file() {
