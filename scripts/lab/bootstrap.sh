@@ -22,8 +22,8 @@ set -euo pipefail
 
 # Pinned to match .github/workflows/helm-validation.yaml, so the lab machine and CI
 # validate charts with the same toolchain.
-HELM_VERSION="${HELM_VERSION:-v4.2.3}"
-HELMFILE_VERSION="${HELMFILE_VERSION:-1.7.1}"
+DPL_HELM_VERSION="${DPL_HELM_VERSION:-v4.2.3}"
+DPL_HELMFILE_VERSION="${DPL_HELMFILE_VERSION:-1.7.1}"
 
 die() {
   echo "error: $*" >&2
@@ -92,9 +92,9 @@ install_helm() {
     return
   fi
 
-  step "Helm ${HELM_VERSION}"
+  step "Helm ${DPL_HELM_VERSION}"
   curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 |
-    sudo DESIRED_VERSION="${HELM_VERSION}" bash
+    sudo DESIRED_VERSION="${DPL_HELM_VERSION}" bash
 
   # helm-diff is what makes `helmfile diff` useful; helmfile prompts for it otherwise.
   helm plugin install https://github.com/databus23/helm-diff >/dev/null 2>&1 ||
@@ -107,8 +107,8 @@ install_helmfile() {
     return
   fi
 
-  step "helmfile ${HELMFILE_VERSION}"
-  local url="https://github.com/helmfile/helmfile/releases/download/v${HELMFILE_VERSION}/helmfile_${HELMFILE_VERSION}_linux_$(arch).tar.gz"
+  step "helmfile ${DPL_HELMFILE_VERSION}"
+  local url="https://github.com/helmfile/helmfile/releases/download/v${DPL_HELMFILE_VERSION}/helmfile_${DPL_HELMFILE_VERSION}_linux_$(arch).tar.gz"
   curl -fsSL "${url}" | tar -xz -C /tmp helmfile
   sudo install -m 0755 /tmp/helmfile /usr/local/bin/helmfile
   rm -f /tmp/helmfile

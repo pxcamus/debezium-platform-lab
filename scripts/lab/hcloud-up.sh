@@ -14,15 +14,15 @@
 # Requires the hcloud CLI, authenticated either by exporting HCLOUD_TOKEN or by an active
 # `hcloud context`. No credential is read from, or written to, this repository.
 #
-# Configuration (all optional except LAB_SSH_KEY):
-#   LAB_SSH_KEY    name of an SSH key already uploaded to your Hetzner project (required)
-#   LAB_IDENTITY   local private key to connect with (default: ssh's own defaults)
-#   LAB_NAME       server name                       (default: dbz-lab)
-#   LAB_TYPE       server type                       (default: cpx32 — 4 vCPU, 8 GB, amd64)
-#   LAB_IMAGE      OS image                          (default: ubuntu-24.04)
-#   LAB_LOCATION   datacenter                        (default: nbg1)
-#   LAB_OPEN_HTTP  expose 80/443 to the internet     (default: false — your IP only)
-#   LAB_YES        skip the confirmation prompt      (default: false)
+# Configuration (all optional except DPL_LAB_SSH_KEY):
+#   DPL_LAB_SSH_KEY    name of an SSH key already uploaded to your Hetzner project (required)
+#   DPL_LAB_IDENTITY   local private key to connect with (default: ssh's own defaults)
+#   DPL_LAB_NAME       server name                       (default: dbz-lab)
+#   DPL_LAB_TYPE       server type                       (default: cpx32 — 4 vCPU, 8 GB, amd64)
+#   DPL_LAB_IMAGE      OS image                          (default: ubuntu-24.04)
+#   DPL_LAB_LOCATION   datacenter                        (default: nbg1)
+#   DPL_LAB_OPEN_HTTP  expose 80/443 to the internet     (default: false — your IP only)
+#   DPL_LAB_YES        skip the confirmation prompt      (default: false)
 #
 # amd64 is deliberate: the Debezium Platform release images are amd64-only (see the
 # README's known gaps), so an arm64 box would fail for reasons unrelated to what is
@@ -34,26 +34,26 @@ set -euo pipefail
 # project.
 readonly LAB_LABEL="lab=dbz-platform"
 
-LAB_NAME="${LAB_NAME:-dbz-lab}"
-LAB_TYPE="${LAB_TYPE:-cpx32}"
-LAB_IMAGE="${LAB_IMAGE:-ubuntu-24.04}"
-LAB_LOCATION="${LAB_LOCATION:-nbg1}"
-LAB_OPEN_HTTP="${LAB_OPEN_HTTP:-false}"
-LAB_YES="${LAB_YES:-false}"
+DPL_LAB_NAME="${DPL_LAB_NAME:-dbz-lab}"
+DPL_LAB_TYPE="${DPL_LAB_TYPE:-cpx32}"
+DPL_LAB_IMAGE="${DPL_LAB_IMAGE:-ubuntu-24.04}"
+DPL_LAB_LOCATION="${DPL_LAB_LOCATION:-nbg1}"
+DPL_LAB_OPEN_HTTP="${DPL_LAB_OPEN_HTTP:-false}"
+DPL_LAB_YES="${DPL_LAB_YES:-false}"
 
 # ssh only offers the default identities (~/.ssh/id_*) plus whatever the agent holds. A lab
 # key created under its own name is therefore never offered, ssh falls through to password
 # auth, and cloud-init sets lock_passwd — so the wait below would time out on a machine that
-# is in fact perfectly healthy. Set LAB_IDENTITY to the matching private key.
-LAB_IDENTITY="${LAB_IDENTITY:-}"
+# is in fact perfectly healthy. Set DPL_LAB_IDENTITY to the matching private key.
+DPL_LAB_IDENTITY="${DPL_LAB_IDENTITY:-}"
 ssh_identity_args=()
-if [[ -n "${LAB_IDENTITY}" ]]; then
-  ssh_identity_args=(-i "${LAB_IDENTITY}" -o IdentitiesOnly=yes)
+if [[ -n "${DPL_LAB_IDENTITY}" ]]; then
+  ssh_identity_args=(-i "${DPL_LAB_IDENTITY}" -o IdentitiesOnly=yes)
 fi
 
-readonly FIREWALL_NAME="${LAB_NAME}-fw"
+readonly FIREWALL_NAME="${DPL_LAB_NAME}-fw"
 readonly STATE_DIR="${XDG_CACHE_HOME:-${HOME}/.cache}/dbz-lab"
-readonly STATE_FILE="${STATE_DIR}/${LAB_NAME}.env"
+readonly STATE_FILE="${STATE_DIR}/${DPL_LAB_NAME}.env"
 readonly CLOUD_INIT="$(dirname "$0")/cloud-init.yaml"
 
 die() {
@@ -71,18 +71,18 @@ preflight() {
     die "no Hetzner credentials — export HCLOUD_TOKEN, or run 'hcloud context create dbz-lab'"
   fi
 
-  [[ -n "${LAB_SSH_KEY:-}" ]] || die "LAB_SSH_KEY must name an SSH key in your Hetzner project ('hcloud ssh-key list')"
-  hcloud ssh-key describe "${LAB_SSH_KEY}" >/dev/null 2>&1 ||
-    die "SSH key '${LAB_SSH_KEY}' not found in this project — see 'hcloud ssh-key list'"
+  [[ -n "${DPL_LAB_SSH_KEY:-}" ]] || die "DPL_LAB_SSH_KEY must name an SSH key in your Hetzner project ('hcloud ssh-key list')"
+  hcloud ssh-key describe "${DPL_LAB_SSH_KEY}" >/dev/null 2>&1 ||
+    die "SSH key '${DPL_LAB_SSH_KEY}' not found in this project — see 'hcloud ssh-key list'"
 
-  if [[ -n "${LAB_IDENTITY}" ]]; then
-    [[ -f "${LAB_IDENTITY}" ]] || die "LAB_IDENTITY points at '${LAB_IDENTITY}', which does not exist"
+  if [[ -n "${DPL_LAB_IDENTITY}" ]]; then
+    [[ -f "${DPL_LAB_IDENTITY}" ]] || die "DPL_LAB_IDENTITY points at '${DPL_LAB_IDENTITY}', which does not exist"
   fi
 
   [[ -f "${CLOUD_INIT}" ]] || die "cloud-init file not found at ${CLOUD_INIT}"
 
-  if hcloud server describe "${LAB_NAME}" >/dev/null 2>&1; then
-    die "server '${LAB_NAME}' already exists — run scripts/lab/hcloud-down.sh first, or set LAB_NAME"
+  if hcloud server describe "${DPL_LAB_NAME}" >/dev/null 2>&1; then
+    die "server '${DPL_LAB_NAME}' already exists — run scripts/lab/hcloud-down.sh first, or set DPL_LAB_NAME"
   fi
 
   check_server_type
@@ -101,11 +101,11 @@ check_server_type() {
   listing="$(hcloud server-type list 2>/dev/null || true)"
   [[ -n "${listing}" ]] || return 0
 
-  line="$(awk -v type="${LAB_TYPE}" '$2 == type' <<<"${listing}")"
-  [[ -n "${line}" ]] || die "unknown server type '${LAB_TYPE}' — see 'hcloud server-type list'"
+  line="$(awk -v type="${DPL_LAB_TYPE}" '$2 == type' <<<"${listing}")"
+  [[ -n "${line}" ]] || die "unknown server type '${DPL_LAB_TYPE}' — see 'hcloud server-type list'"
 
   if [[ "${line}" == *" arm "* ]]; then
-    echo "warning: ${LAB_TYPE} is arm64 and the Debezium Platform release images are amd64-only." >&2
+    echo "warning: ${DPL_LAB_TYPE} is arm64 and the Debezium Platform release images are amd64-only." >&2
   fi
 
   # The locations are the last column, after the memory and disk sizes: strip everything
@@ -113,10 +113,10 @@ check_server_type() {
   locations="${line##* GB }"
   locations="${locations// /}"
 
-  if [[ ",${locations}," != *",${LAB_LOCATION},"* ]]; then
-    die "server type '${LAB_TYPE}' is not available in '${LAB_LOCATION}'.
+  if [[ ",${locations}," != *",${DPL_LAB_LOCATION},"* ]]; then
+    die "server type '${DPL_LAB_TYPE}' is not available in '${DPL_LAB_LOCATION}'.
        Available in: ${locations//,/, }
-       Pick another location with LAB_LOCATION, or another type with LAB_TYPE ('hcloud server-type list')."
+       Pick another location with DPL_LAB_LOCATION, or another type with DPL_LAB_TYPE ('hcloud server-type list')."
   fi
 }
 
@@ -137,16 +137,16 @@ confirm() {
 
   This creates billable Hetzner Cloud resources:
 
-    server     ${LAB_NAME}  (${LAB_TYPE}, ${LAB_IMAGE}, ${LAB_LOCATION})
+    server     ${DPL_LAB_NAME}  (${DPL_LAB_TYPE}, ${DPL_LAB_IMAGE}, ${DPL_LAB_LOCATION})
     firewall   ${FIREWALL_NAME}
     ssh + k8s API reachable from ${ip}/32 only
-    http/https $(if [[ "${LAB_OPEN_HTTP}" == "true" ]]; then echo "OPEN TO THE INTERNET"; else echo "${ip}/32 only"; fi)
+    http/https $(if [[ "${DPL_LAB_OPEN_HTTP}" == "true" ]]; then echo "OPEN TO THE INTERNET"; else echo "${ip}/32 only"; fi)
 
   They bill by the hour until you run scripts/lab/hcloud-down.sh.
 
 EOF
 
-  if [[ "${LAB_YES}" == "true" ]]; then
+  if [[ "${DPL_LAB_YES}" == "true" ]]; then
     return 0
   fi
 
@@ -158,7 +158,7 @@ create_firewall() {
   local ip="$1"
   local http_source="${ip}/32"
 
-  if [[ "${LAB_OPEN_HTTP}" == "true" ]]; then
+  if [[ "${DPL_LAB_OPEN_HTTP}" == "true" ]]; then
     http_source="0.0.0.0/0"
   fi
 
@@ -183,13 +183,13 @@ create_firewall() {
 }
 
 create_server() {
-  echo "Creating server ${LAB_NAME} (${LAB_TYPE}, ${LAB_IMAGE}, ${LAB_LOCATION})"
+  echo "Creating server ${DPL_LAB_NAME} (${DPL_LAB_TYPE}, ${DPL_LAB_IMAGE}, ${DPL_LAB_LOCATION})"
   hcloud server create \
-    --name "${LAB_NAME}" \
-    --type "${LAB_TYPE}" \
-    --image "${LAB_IMAGE}" \
-    --location "${LAB_LOCATION}" \
-    --ssh-key "${LAB_SSH_KEY}" \
+    --name "${DPL_LAB_NAME}" \
+    --type "${DPL_LAB_TYPE}" \
+    --image "${DPL_LAB_IMAGE}" \
+    --location "${DPL_LAB_LOCATION}" \
+    --ssh-key "${DPL_LAB_SSH_KEY}" \
     --firewall "${FIREWALL_NAME}" \
     --label "${LAB_LABEL}" \
     --user-data-from-file "${CLOUD_INIT}" >/dev/null
@@ -217,13 +217,13 @@ wait_for_ssh() {
   die "timed out waiting for SSH — the server exists at ${ip}.
      The usual cause is ssh not offering the right key rather than a broken machine: this
      waits with BatchMode, so a key ssh does not offer looks identical to a machine that
-     never came up. Set LAB_IDENTITY to the private key matching '${LAB_SSH_KEY}' and
+     never came up. Set DPL_LAB_IDENTITY to the private key matching '${DPL_LAB_SSH_KEY}' and
      re-run, or connect by hand to see the real error:
 
-       ssh -v${LAB_IDENTITY:+ -i ${LAB_IDENTITY}} lab@${ip}
+       ssh -v${DPL_LAB_IDENTITY:+ -i ${DPL_LAB_IDENTITY}} lab@${ip}
 
      If root works but lab does not, cloud-init has not finished — see
-     'hcloud server describe ${LAB_NAME}'."
+     'hcloud server describe ${DPL_LAB_NAME}'."
 }
 
 write_state() {
@@ -233,11 +233,11 @@ write_state() {
   # committable by accident.
   mkdir -p "${STATE_DIR}"
   cat >"${STATE_FILE}" <<EOF
-LAB_NAME=${LAB_NAME}
-LAB_IP=${ip}
-LAB_SSH=lab@${ip}
-LAB_IDENTITY=${LAB_IDENTITY}
-LAB_DOMAIN=${ip//./-}.sslip.io
+DPL_LAB_NAME=${DPL_LAB_NAME}
+DPL_LAB_IP=${ip}
+DPL_LAB_SSH=lab@${ip}
+DPL_LAB_IDENTITY=${DPL_LAB_IDENTITY}
+DPL_LAB_DOMAIN=${ip//./-}.sslip.io
 EOF
   echo "Wrote ${STATE_FILE}"
 }
@@ -253,7 +253,7 @@ main() {
   create_server
 
   local server_ip
-  server_ip="$(hcloud server ip "${LAB_NAME}")"
+  server_ip="$(hcloud server ip "${DPL_LAB_NAME}")"
 
   wait_for_ssh "${server_ip}"
   write_state "${server_ip}"
@@ -262,15 +262,19 @@ main() {
 
   Ready.
 
-    ssh${LAB_IDENTITY:+ -i ${LAB_IDENTITY}} lab@${server_ip}
+    ssh${DPL_LAB_IDENTITY:+ -i ${DPL_LAB_IDENTITY}} lab@${server_ip}
 
-  The machine is intentionally bare — no docker, no kubectl, no Go. That is the point:
-  run the preflight check against it before installing anything, and whatever it fails to
-  report is a gap in the check, not in the machine.
+  The machine is intentionally bare — no docker, no kubectl, no helm. That is the point:
+  note what it is missing before you install anything, because a bootstrapped machine can
+  no longer tell you.
+
+  Bootstrap it with:
+
+    ssh${DPL_LAB_IDENTITY:+ -i ${DPL_LAB_IDENTITY}} lab@${server_ip} 'bash -s' < scripts/lab/bootstrap.sh
 
   Ingress hostnames without touching /etc/hosts:
 
-    DBZ_DOMAIN=${server_ip//./-}.sslip.io
+    DPL_DOMAIN=${server_ip//./-}.sslip.io
 
   Destroy it when you are done — it bills until then:
 

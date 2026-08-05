@@ -7,24 +7,13 @@
 #
 #   scripts/with-env.sh helmfile --file deploy/helmfile.yaml.gotmpl \
 #     --selector app=debezium-platform template
-#   scripts/with-env.sh kubectl get pods -n "${DBZ_NAMESPACE}"
+#   scripts/with-env.sh kubectl get pods -n "${DPL_NAMESPACE}"
 #
 # Run from the repo root (paths below are repo-relative, matching helmfile).
 set -euo pipefail
 
-load_env_file() {
-  local file="$1"
-  [[ -f "${file}" ]] || return 0
-  set -a
-  # shellcheck disable=SC1090
-  source "${file}"
-  set +a
-}
-
-# versions.env first (shared, non-sensitive fallback), .env last so it wins —
-# shell last-wins matches godotenv's first-wins-with-.env-loaded-first.
-load_env_file "deploy/environment/versions.env"
-load_env_file ".env"
+# shellcheck source=scripts/lib/env.sh
+source "$(dirname "${BASH_SOURCE[0]}")/lib/env.sh"
 
 if [[ $# -eq 0 ]]; then
   echo "usage: scripts/with-env.sh <command> [args...]" >&2

@@ -1,7 +1,7 @@
 # Keycloak — homelab. Rendered by helmfile with the environment loaded, so
-# DBZ_DOMAIN drives the public host (auth.<domain>), the wildcard Certificate,
+# DPL_DOMAIN drives the public host (auth.<domain>), the wildcard Certificate,
 # and the Ingress TLS secret. See deploy/charts/keycloak/ for the templates.
-domain: {{ requiredEnv "DBZ_DOMAIN" }}
+domain: {{ requiredEnv "DPL_DOMAIN" }}
 
 instances: 1
 

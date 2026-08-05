@@ -41,7 +41,7 @@ For the step-by-step version — what each command does, what healthy output loo
 ```bash
 # 1. Configure environment
 cp .env.example .env
-#    Ensure DBZ_ENV=local and CLUSTER_TYPE=kind in .env
+#    Ensure DPL_ENV=local and DPL_CLUSTER_TYPE=kind in .env
 
 # 2. Create the local cluster
 kind create cluster --name dmp --config deploy/clusters/kind/kind-ingress.yaml
@@ -69,7 +69,7 @@ Seeding the demo databases and creating the platform's pipelines were `mage data
 
 - **Seeding and scenarios have no runner right now.** `resources/data/` (PostgreSQL SQL, MongoDB JS) and `data-pipelines/config/` (per-scenario `scenario.yaml` + JSON payloads) are intact, but nothing in the repository executes them since the Go code was removed.
 - **Only the MongoDB replica-set scenario was ever wired up.** The `postgres-basic` and `sqlserver-basic` directories under `data-pipelines/config/` contain payloads that were never exposed as targets.
-- **SQL Server requires amd64.** Microsoft ships no arm64 SQL Server image (and Azure SQL Edge, the historical arm64 stand-in, was retired 2025-09-30). The `mssql` release is not part of the sequence above — apply it explicitly (`helmfile --file deploy/helmfile.yaml.gotmpl --selector app=mssql apply`) — so this only affects SQL Server work. Use an amd64 cluster (`CLUSTER_TYPE=k3s` on a cloud box) for it.
+- **SQL Server requires amd64.** Microsoft ships no arm64 SQL Server image (and Azure SQL Edge, the historical arm64 stand-in, was retired 2025-09-30). The `mssql` release is not part of the sequence above — apply it explicitly (`helmfile --file deploy/helmfile.yaml.gotmpl --selector app=mssql apply`) — so this only affects SQL Server work. Use an amd64 cluster (`DPL_CLUSTER_TYPE=k3s` on a cloud box) for it.
 - **Debezium Platform release images are amd64-only** (`platform-conductor` / `platform-stage` version tags, checked 2026-07); only the `nightly` tag is multi-arch. `deploy/environment/versions.env` pins `nightly` for this reason. Everything else on the default path — Strimzi operator and Kafka, MongoDB operator/server, CloudNativePG and PostgreSQL, ingress-nginx, the Debezium Operator — publishes amd64+arm64.
 
 ---
@@ -82,15 +82,15 @@ Seeding the demo databases and creating the platform's pipelines were `mage data
 
 | Variable | Purpose | Default |
 |---|---|---|
-| `DBZ_VERSION` | Debezium Helm chart version | **required** (from `versions.env`) |
-| `DBZ_ENV` | Deployment environment; selects `deploy/values/<component>/<DBZ_ENV>.yaml.gotmpl` | `local` |
-| `DBZ_DOMAIN` | Base DNS zone; every ingress host is `<component>.${DBZ_DOMAIN}` (e.g. `dmp.`, `apicurio.`, `kafbat.`, `registry.`) | **required** — rendered with `requiredEnv` |
-| `DBZ_NAMESPACE` | Debezium Platform namespace | `dmp` |
-| `CLUSTER_TYPE` | Cluster provider: `kind` or `k3s` | `kind` |
-| `DMP_RESOURCE_PREFIX` / `DMP_ENVIRONMENT` | Prefix for deterministic DMP resource names | — |
-| `KAFKA_DMP_BOOTSTRAP_SERVERS` | Kafka bootstrap for DMP payloads | — |
+| `DPL_DEBEZIUM_VERSION` | Debezium Helm chart version | **required** (from `versions.env`) |
+| `DPL_ENV` | Deployment environment; selects `deploy/values/<component>/<DPL_ENV>.yaml.gotmpl` | `local` |
+| `DPL_DOMAIN` | Base DNS zone; every ingress host is `<component>.${DPL_DOMAIN}` (e.g. `dmp.`, `apicurio.`, `kafbat.`, `registry.`) | **required** — rendered with `requiredEnv` |
+| `DPL_NAMESPACE` | Debezium Platform namespace | `dmp` |
+| `DPL_CLUSTER_TYPE` | Cluster provider: `kind` or `k3s` | `kind` |
+| `DPL_DMP_RESOURCE_PREFIX` / `DPL_DMP_ENVIRONMENT` | Prefix for deterministic DMP resource names | — |
+| `DPL_DMP_KAFKA_BOOTSTRAP_SERVERS` | Kafka bootstrap for DMP payloads | — |
 
-Known `DBZ_ENV` values in this repo: `local`, `homelab` (self-hosted k3s + public TLS), `aws`, `hetzner`. Each has a matching values file under `deploy/values/<component>/`.
+Known `DPL_ENV` values in this repo: `local`, `homelab` (self-hosted k3s + public TLS), `aws`, `hetzner`. Each has a matching values file under `deploy/values/<component>/`.
 
 DMP JSON payloads use `${ENV_VAR}` syntax, expanded from the environment when the payload is loaded.
 
@@ -149,9 +149,9 @@ scripts/
 
 ## Optional: HTTPS via cert-manager + Gandi (homelab only)
 
-The files under [`certs/`](certs/) and the `cert-manager-webhook-gandi` release in the helmfile expose platform services over HTTPS using Let's Encrypt with a DNS-01 challenge solved through the [Gandi](https://www.gandi.net/) DNS API. **This is entirely optional and specific to a self-hosted homelab (`DBZ_ENV=homelab`, wildcard domain `*.example.com` — replace with your own); a local Kind demo does not need it.**
+The files under [`certs/`](certs/) and the `cert-manager-webhook-gandi` release in the helmfile expose platform services over HTTPS using Let's Encrypt with a DNS-01 challenge solved through the [Gandi](https://www.gandi.net/) DNS API. **This is entirely optional and specific to a self-hosted homelab (`DPL_ENV=homelab`, wildcard domain `*.example.com` — replace with your own); a local Kind demo does not need it.**
 
-The webhook release is gated on `DBZ_ENV=homelab`, so it is not installed for `local`. To use it in your own environment:
+The webhook release is gated on `DPL_ENV=homelab`, so it is not installed for `local`. To use it in your own environment:
 
 1. Set your ACME registration email in `certs/letsencrypt-*-clusterissuer.yaml` (currently a placeholder).
 2. Provide your Gandi Personal Access Token. It is **not committed** — create the Secret out of band:
@@ -169,7 +169,7 @@ The webhook release is gated on `DBZ_ENV=homelab`, so it is not installed for `l
 
 ## Notes & gotchas
 
-- **`DBZ_DOMAIN` has no default at render time.** The values templates use `requiredEnv "DBZ_DOMAIN"`, so helmfile fails outright if it is unset. Add matching `/etc/hosts` entries for the local demo.
-- **Exported shell variables win over `.env`.** Both files are loaded without overriding what is already in the environment, so a stale exported `DBZ_*` silently beats the file.
-- **Idempotent DMP resources:** the payloads are named deterministically (`${DMP_RESOURCE_PREFIX}-${DMP_ENVIRONMENT}-<type>`) so a resource can be found by name and reused rather than duplicated.
+- **`DPL_DOMAIN` has no default at render time.** The values templates use `requiredEnv "DPL_DOMAIN"`, so helmfile fails outright if it is unset. `.env.example` defaults it to `127-0-0-1.sslip.io`, which resolves to `127.0.0.1` where the Kind node publishes ports 80 and 443 — no `/etc/hosts` entries needed. If your resolver drops public answers that point at loopback (DNS rebinding protection) or you are offline, `dig +short dmp.127-0-0-1.sslip.io` returns nothing useful; set a private zone and map the hosts by hand instead. `scripts/lab/hcloud-up.sh` prints the equivalent `<ip>.sslip.io` value for the Hetzner lab.
+- **Exported shell variables win over `.env`.** Both files are loaded without overriding what is already in the environment, so a stale exported `DPL_*` silently beats the file. Every variable is prefixed `DPL_` (`env | grep DPL_` shows the lot); the old `DBZ_*`, `KIND_*`, `LAB_*` and `DMP_*` names are gone, and `scripts/lib/env.sh` warns if one is still exported in your shell.
+- **Idempotent DMP resources:** the payloads are named deterministically (`${DPL_DMP_RESOURCE_PREFIX}-${DPL_DMP_ENVIRONMENT}-<type>`) so a resource can be found by name and reused rather than duplicated.
 - **Commented-out releases:** `helmfile.yaml.gotmpl` contains disabled blocks for optional/retired components (Apicurio, CDC dashboard, Kafka Connect). Don't enable without checking the dependency chain.

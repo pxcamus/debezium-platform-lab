@@ -1,5 +1,5 @@
 {
-  "name": "${DMP_RESOURCE_PREFIX}-${DMP_ENVIRONMENT}-kafka-string-destination",
+  "name": "${DPL_DMP_RESOURCE_PREFIX}-${DPL_DMP_ENVIRONMENT}-kafka-string-destination",
   "description": "Generic Kafka destination using StringSerializer",
   "type": "kafka",
   "schema": "schema321",

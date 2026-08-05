@@ -70,7 +70,7 @@ CI enforces these on every PR:
 See [`AGENTS.md`](AGENTS.md) for the full set:
 
 - Values files are per-component and per-environment:
-  `deploy/values/<component>/<DBZ_ENV>.yaml.gotmpl`.
+  `deploy/values/<component>/<DPL_ENV>.yaml.gotmpl`.
 - Prefer adding a values layer over forking a chart.
 - Version pins go in `versions.env`, secrets and host overrides in `.env`.
 - All DMP JSON payloads must have a `"name"` field; `${ENV_VAR}` in payloads is
@@ -80,5 +80,5 @@ See [`AGENTS.md`](AGENTS.md) for the full set:
 ## Reporting issues
 
 Open a GitHub issue with enough detail to reproduce: the command you ran, your
-`DBZ_ENV` / `CLUSTER_TYPE`, and the relevant output. Please redact any real
+`DPL_ENV` / `DPL_CLUSTER_TYPE`, and the relevant output. Please redact any real
 secrets.

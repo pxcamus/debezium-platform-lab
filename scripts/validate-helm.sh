@@ -19,12 +19,12 @@ load_env_file() {
 load_env_file "deploy/environment/versions.env"
 load_env_file ".env"
 
-: "${DBZ_VERSION:?DBZ_VERSION must be set in deploy/environment/versions.env, .env, or the environment}"
-: "${DBZ_ENV:=local}"
-: "${DBZ_DOMAIN:=platform.debezium.local}"
-: "${DBZ_NAMESPACE:=dmp}"
-: "${DBZ_IMAGE_TAG:=nightly}"
-: "${DBZ_IMAGE_TAG_CONDUCTOR:=nightly}"
+: "${DPL_DEBEZIUM_VERSION:?DPL_DEBEZIUM_VERSION must be set in deploy/environment/versions.env, .env, or the environment}"
+: "${DPL_ENV:=local}"
+: "${DPL_DOMAIN:=platform.debezium.local}"
+: "${DPL_NAMESPACE:=dmp}"
+: "${DPL_IMAGE_TAG:=nightly}"
+: "${DPL_IMAGE_TAG_CONDUCTOR:=nightly}"
 
 charts=(
   deploy/charts/apicurio-registry
@@ -66,12 +66,12 @@ chart_values_args() {
 # ... existing code ...
 
 echo "==> Helmfile lint"
-DBZ_VERSION="${DBZ_VERSION}" \
-DBZ_ENV="${DBZ_ENV}" \
-DBZ_DOMAIN="${DBZ_DOMAIN}" \
-DBZ_NAMESPACE="${DBZ_NAMESPACE}" \
-DBZ_IMAGE_TAG="${DBZ_IMAGE_TAG}" \
-DBZ_IMAGE_TAG_CONDUCTOR="${DBZ_IMAGE_TAG_CONDUCTOR}" \
+DPL_DEBEZIUM_VERSION="${DPL_DEBEZIUM_VERSION}" \
+DPL_ENV="${DPL_ENV}" \
+DPL_DOMAIN="${DPL_DOMAIN}" \
+DPL_NAMESPACE="${DPL_NAMESPACE}" \
+DPL_IMAGE_TAG="${DPL_IMAGE_TAG}" \
+DPL_IMAGE_TAG_CONDUCTOR="${DPL_IMAGE_TAG_CONDUCTOR}" \
 helmfile --file deploy/helmfile.yaml.gotmpl lint
 
 helmfile_envs=(
@@ -92,7 +92,7 @@ helmfile_env_is_complete() {
 
   while IFS= read -r file; do
     if [[ ! -f "${file}" ]]; then
-      echo "Skipping DBZ_ENV=${env}: missing ${file}"
+      echo "Skipping DPL_ENV=${env}: missing ${file}"
       return 1
     fi
   done < <(helmfile_env_required_files "${env}")
@@ -103,14 +103,14 @@ helmfile_env_is_complete() {
 template_helmfile_env() {
   local env="$1"
 
-  echo "Rendering Helmfile with DBZ_ENV=${env}"
+  echo "Rendering Helmfile with DPL_ENV=${env}"
 
-  DBZ_VERSION="${DBZ_VERSION}" \
-  DBZ_ENV="${env}" \
-  DBZ_DOMAIN="${DBZ_DOMAIN}" \
-  DBZ_NAMESPACE="${DBZ_NAMESPACE}" \
-  DBZ_IMAGE_TAG="${DBZ_IMAGE_TAG}" \
-  DBZ_IMAGE_TAG_CONDUCTOR="${DBZ_IMAGE_TAG_CONDUCTOR}" \
+  DPL_DEBEZIUM_VERSION="${DPL_DEBEZIUM_VERSION}" \
+  DPL_ENV="${env}" \
+  DPL_DOMAIN="${DPL_DOMAIN}" \
+  DPL_NAMESPACE="${DPL_NAMESPACE}" \
+  DPL_IMAGE_TAG="${DPL_IMAGE_TAG}" \
+  DPL_IMAGE_TAG_CONDUCTOR="${DPL_IMAGE_TAG_CONDUCTOR}" \
   helmfile --file deploy/helmfile.yaml.gotmpl template \
     | kubeconform \
         -schema-location default \

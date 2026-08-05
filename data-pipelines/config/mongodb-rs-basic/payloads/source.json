@@ -1,5 +1,5 @@
 {
-  "name": "${DMP_RESOURCE_PREFIX}-${DMP_ENVIRONMENT}-mongodb-rs-basic-source",
+  "name": "${DPL_DMP_RESOURCE_PREFIX}-${DPL_DMP_ENVIRONMENT}-mongodb-rs-basic-source",
   "description": "MongoDB replica set source",
   "type": "io.debezium.connector.mongodb.MongoDbConnector",
   "schema": "schema321",

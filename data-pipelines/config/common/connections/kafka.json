@@ -1,7 +1,7 @@
 {
-  "name": "${DMP_RESOURCE_PREFIX}-${DMP_ENVIRONMENT}-kafka",
+  "name": "${DPL_DMP_RESOURCE_PREFIX}-${DPL_DMP_ENVIRONMENT}-kafka",
   "type": "KAFKA",
   "config": {
-    "bootstrap.servers": "${KAFKA_DMP_BOOTSTRAP_SERVERS}"
+    "bootstrap.servers": "${DPL_DMP_KAFKA_BOOTSTRAP_SERVERS}"
   }
 }

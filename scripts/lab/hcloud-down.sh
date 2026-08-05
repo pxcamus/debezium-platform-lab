@@ -4,7 +4,7 @@
 # MAINTAINER TOOLING. See hcloud-up.sh for the full description.
 #
 #   scripts/lab/hcloud-down.sh        # list what will be deleted, then confirm
-#   LAB_YES=true scripts/lab/hcloud-down.sh
+#   DPL_LAB_YES=true scripts/lab/hcloud-down.sh
 #
 # SAFETY: this only ever acts on resources carrying the label below, and it takes no
 # server name as an argument. If your Hetzner project holds anything you care about, it
@@ -13,7 +13,7 @@ set -euo pipefail
 
 readonly LAB_LABEL="lab=dbz-platform"
 
-LAB_YES="${LAB_YES:-false}"
+DPL_LAB_YES="${DPL_LAB_YES:-false}"
 
 readonly STATE_DIR="${XDG_CACHE_HOME:-${HOME}/.cache}/dbz-lab"
 
@@ -62,7 +62,7 @@ main() {
   fi
   echo
 
-  if [[ "${LAB_YES}" != "true" ]]; then
+  if [[ "${DPL_LAB_YES}" != "true" ]]; then
     read -r -p "  Delete them? [y/N] " answer
     [[ "${answer}" == "y" || "${answer}" == "Y" ]] || die "aborted"
   fi

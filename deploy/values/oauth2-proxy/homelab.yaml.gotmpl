@@ -1,5 +1,5 @@
 # oauth2-proxy — homelab. Rendered by helmfile with the environment loaded.
-# Runs as the reverse proxy IN FRONT of the whole dmp.${DBZ_DOMAIN} host. Unauthenticated
+# Runs as the reverse proxy IN FRONT of the whole dmp.${DPL_DOMAIN} host. Unauthenticated
 # requests get an automatic 302 to Keycloak — no Traefik errors-middleware / cross-namespace
 # dance that ForwardAuth would otherwise need just to redirect on 401. After login it proxies
 # /api -> conductor (injecting Authorization: Bearer so the conductor resource server validates
@@ -21,15 +21,15 @@ config:
   # from existingSecret. Ports: conductor Service :8080 (/api), stage Service :3000 (everything else).
   configFile: |-
     provider = "oidc"
-    oidc_issuer_url = "https://auth.{{ requiredEnv "DBZ_DOMAIN" }}/realms/dmp"
-    redirect_url = "https://dmp.{{ requiredEnv "DBZ_DOMAIN" }}/oauth2/callback"
+    oidc_issuer_url = "https://auth.{{ requiredEnv "DPL_DOMAIN" }}/realms/dmp"
+    redirect_url = "https://dmp.{{ requiredEnv "DPL_DOMAIN" }}/oauth2/callback"
     email_domains = ["*"]
     # Homelab realm users (thorin, …) are test accounts with unverified emails; don't reject
     # them on the email_verified claim. Drop this once users have verified emails / real IdP.
     insecure_oidc_allow_unverified_email = true
-    cookie_domains = [".{{ requiredEnv "DBZ_DOMAIN" }}"]
+    cookie_domains = [".{{ requiredEnv "DPL_DOMAIN" }}"]
     cookie_secure = true
-    whitelist_domains = [".{{ requiredEnv "DBZ_DOMAIN" }}"]
+    whitelist_domains = [".{{ requiredEnv "DPL_DOMAIN" }}"]
     reverse_proxy = true
     # pass_authorization_header (NOT set_authorization_header) injects Authorization: Bearer
     # <id_token> into the UPSTREAM request so the conductor resource server validates it.
@@ -39,8 +39,8 @@ config:
     # conductor path has a trailing slash so it's a subtree (prefix) match — "/api" without
     # it is an exact match and /api/pipelines falls through to the stage "/" upstream.
     upstreams = [
-      "http://conductor.{{ env "DBZ_NAMESPACE" | default "dmp" }}.svc.cluster.local:8080/api/",
-      "http://stage.{{ env "DBZ_NAMESPACE" | default "dmp" }}.svc.cluster.local:3000/"
+      "http://conductor.{{ env "DPL_NAMESPACE" | default "dmp" }}.svc.cluster.local:8080/api/",
+      "http://stage.{{ env "DPL_NAMESPACE" | default "dmp" }}.svc.cluster.local:3000/"
     ]
 
 # Single front door for the dmp host (path / catches everything; oauth2-proxy serves /oauth2/*
@@ -52,8 +52,8 @@ ingress:
   path: /
   pathType: Prefix
   hosts:
-    - dmp.{{ requiredEnv "DBZ_DOMAIN" }}
+    - dmp.{{ requiredEnv "DPL_DOMAIN" }}
   tls:
-    - secretName: wildcard-{{ requiredEnv "DBZ_DOMAIN" | replace "." "-" }}-tls
+    - secretName: wildcard-{{ requiredEnv "DPL_DOMAIN" | replace "." "-" }}-tls
       hosts:
-        - dmp.{{ requiredEnv "DBZ_DOMAIN" }}
+        - dmp.{{ requiredEnv "DPL_DOMAIN" }}

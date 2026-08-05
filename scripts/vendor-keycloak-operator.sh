@@ -11,7 +11,7 @@
 #   manifests in a local chart: deploy/charts/keycloak-operator/.
 #
 # WHAT IT DOES
-#   Downloads the three upstream files, PINNED to KEYCLOAK_OPERATOR_VERSION, into
+#   Downloads the three upstream files, PINNED to DPL_KEYCLOAK_OPERATOR_VERSION, into
 #   that local chart:
 #     - crds/  : the two CustomResourceDefinitions (Keycloak, KeycloakRealmImport)
 #     - templates/operator.yaml : the operator Deployment + RBAC + Service
@@ -23,12 +23,12 @@
 #   <moving-url>` that nobody can audit.
 #
 # WHEN TO RUN IT
-#   Once now, and again whenever you bump KEYCLOAK_OPERATOR_VERSION in
+#   Once now, and again whenever you bump DPL_KEYCLOAK_OPERATOR_VERSION in
 #   deploy/environment/versions.env. Commit the regenerated files.
 #
 # USAGE
 #   scripts/vendor-keycloak-operator.sh                 # reads versions.env
-#   KEYCLOAK_OPERATOR_VERSION=26.7.0 scripts/vendor-keycloak-operator.sh
+#   DPL_KEYCLOAK_OPERATOR_VERSION=26.7.0 scripts/vendor-keycloak-operator.sh
 # =============================================================================
 set -euo pipefail
 
@@ -37,15 +37,15 @@ repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 # --- Resolve the pinned version ---------------------------------------------
 # Prefer an explicit env var; otherwise read the pin from versions.env so the
 # vendored files always match the version the rest of the repo deploys.
-if [[ -z "${KEYCLOAK_OPERATOR_VERSION:-}" ]]; then
+if [[ -z "${DPL_KEYCLOAK_OPERATOR_VERSION:-}" ]]; then
   versions_file="${repo_root}/deploy/environment/versions.env"
   if [[ -f "${versions_file}" ]]; then
-    KEYCLOAK_OPERATOR_VERSION="$(grep -E '^KEYCLOAK_OPERATOR_VERSION=' "${versions_file}" | tail -1 | cut -d= -f2)"
+    DPL_KEYCLOAK_OPERATOR_VERSION="$(grep -E '^DPL_KEYCLOAK_OPERATOR_VERSION=' "${versions_file}" | tail -1 | cut -d= -f2)"
   fi
 fi
-: "${KEYCLOAK_OPERATOR_VERSION:?Set KEYCLOAK_OPERATOR_VERSION (env or deploy/environment/versions.env)}"
+: "${DPL_KEYCLOAK_OPERATOR_VERSION:?Set DPL_KEYCLOAK_OPERATOR_VERSION (env or deploy/environment/versions.env)}"
 
-version="${KEYCLOAK_OPERATOR_VERSION}"
+version="${DPL_KEYCLOAK_OPERATOR_VERSION}"
 base="https://raw.githubusercontent.com/keycloak/keycloak-k8s-resources/${version}/kubernetes"
 chart_dir="${repo_root}/deploy/charts/keycloak-operator"
 

@@ -83,15 +83,15 @@ belongs in `docs/reference/environment.md`.
 
 | Variable | Purpose | Default |
 |---|---|---|
-| `DBZ_ENV` | Deployment environment; selects `deploy/values/<component>/<DBZ_ENV>.yaml.gotmpl` | `local` |
-| `DBZ_DOMAIN` | Base DNS zone; ingress hosts are `<component>.${DBZ_DOMAIN}` | **none** — rendered with `requiredEnv`, so helmfile fails if unset |
-| `DBZ_VERSION` | Debezium helm chart version | from `versions.env` |
-| `DBZ_NAMESPACE` | Debezium namespace | `dmp` |
-| `CLUSTER_TYPE` | Cluster provider (`kind` or `k3s`) | `kind` |
-| `DMP_RESOURCE_PREFIX` / `DMP_ENVIRONMENT` | Resource naming prefix | used in JSON payloads |
-| `KAFKA_DMP_BOOTSTRAP_SERVERS` | Kafka bootstrap servers | used in JSON payloads |
+| `DPL_ENV` | Deployment environment; selects `deploy/values/<component>/<DPL_ENV>.yaml.gotmpl` | `local` |
+| `DPL_DOMAIN` | Base DNS zone; ingress hosts are `<component>.${DPL_DOMAIN}` | **none** — rendered with `requiredEnv`, so helmfile fails if unset |
+| `DPL_DEBEZIUM_VERSION` | Debezium helm chart version | from `versions.env` |
+| `DPL_NAMESPACE` | Debezium namespace | `dmp` |
+| `DPL_CLUSTER_TYPE` | Cluster provider (`kind` or `k3s`) | `kind` |
+| `DPL_DMP_RESOURCE_PREFIX` / `DPL_DMP_ENVIRONMENT` | Resource naming prefix | used in JSON payloads |
+| `DPL_DMP_KAFKA_BOOTSTRAP_SERVERS` | Kafka bootstrap servers | used in JSON payloads |
 
-Known `DBZ_ENV` values: `local`, `homelab`, `aws`, `hetzner`.
+Known `DPL_ENV` values: `local`, `homelab`, `aws`, `hetzner`.
 
 ### JSON payload environment expansion
 
@@ -103,7 +103,7 @@ and `data-pipelines/config/<name>/payloads/`.
 ### Resource naming convention
 
 DMP resources are named deterministically from the payload's `name` field after expansion, typically
-`${DMP_RESOURCE_PREFIX}-${DMP_ENVIRONMENT}-<resource-type>`. The convention exists so a resource can
+`${DPL_DMP_RESOURCE_PREFIX}-${DPL_DMP_ENVIRONMENT}-<resource-type>`. The convention exists so a resource can
 be found by name and reused rather than duplicated. Every payload MUST have a `"name"` key.
 
 ## Helm Deployments
@@ -125,15 +125,15 @@ healthy release. The Keycloak release documents this in place.
 
 ## Conventions
 
-- Values files are per-component and per-environment: `deploy/values/<component>/<DBZ_ENV>.yaml.gotmpl`
+- Values files are per-component and per-environment: `deploy/values/<component>/<DPL_ENV>.yaml.gotmpl`
 - Prefer adding a values layer over forking a chart
 - Version pins go in `versions.env`, secrets in `.env`, never the reverse
 - Run `scripts/validate-helm.sh` before proposing chart changes
 
 ## Gotchas
 
-1. **Exported shell variables beat both env files.** Loading is non-overriding, so a stale exported `DBZ_*` in your shell silently wins over `.env` and `versions.env`.
-2. **`DBZ_DOMAIN` has no default at render time** despite what older docs claimed — `deploy/values/dmp/local.yaml.gotmpl` uses `requiredEnv`.
+1. **Exported shell variables beat both env files.** Loading is non-overriding, so a stale exported `DPL_*` in your shell silently wins over `.env` and `versions.env`. Variables were renamed from `DBZ_*`/`KIND_*`/`LAB_*`/`DMP_*` to a single `DPL_` prefix; `scripts/lib/env.sh` warns if a legacy name is still exported.
+2. **`DPL_DOMAIN` has no default at render time** despite what older docs claimed — `deploy/values/dmp/local.yaml.gotmpl` uses `requiredEnv`. The convention is sslip.io in dash notation: `.env.example` ships `127-0-0-1.sslip.io` for Kind (which publishes 80/443 on `127.0.0.1`) and `scripts/lab/hcloud-up.sh` prints `<ip-with-dashes>.sslip.io` for the Hetzner lab, so neither needs `/etc/hosts`. Note `scripts/validate-helm.sh` still falls back to `platform.debezium.local` — that value only has to render, never resolve.
 3. **Commented-out releases**: `helmfile.yaml.gotmpl` contains disabled blocks for optional or retired components (Apicurio, CDC dashboard, Kafka Connect). Don't enable without understanding the dependency chain.
 4. **Seeding and scenarios have no runner.** `resources/data/` and `data-pipelines/config/` are intact data with nothing in the repository to execute them, pending the `just` + JBang rebuild.
 5. **`certs/` is applied by hand** (`kubectl apply -f certs/`) and is the only Kubernetes resource set outside both Helm and helmfile. It is homelab-only and slated to be folded into a gated release.
