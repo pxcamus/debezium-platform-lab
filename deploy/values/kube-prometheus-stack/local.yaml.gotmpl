@@ -1,0 +1,76 @@
+# kube-prometheus-stack — local (Kind, ingress-nginx, no cert-manager, no TLS)
+#
+# Wired into deploy/helmfile.yaml.gotmpl as the `kube-prometheus-stack` release,
+# labelled infra:true. Applied via:
+#   helmfile --file deploy/helmfile.yaml.gotmpl --selector app=kube-prometheus-stack apply
+# (or as part of --selector infra=true).
+#
+# This is not the homelab file with smaller numbers — a throwaway single-node Kind
+# cluster differs in kind, not degree:
+#
+#   - No persistence anywhere. `just kind-recreate` destroys the cluster, so a PVC
+#     only adds startup latency and leaks a volume. Prometheus and Grafana both fall
+#     back to emptyDir; metrics do not survive a pod restart, deliberately.
+#   - Alertmanager off. Nothing on a local cluster routes alerts.
+#   - node-exporter off. Inside Kind it reports the Docker VM's filesystems, not
+#     anything you can act on.
+#   - The four control-plane scrape jobs off. Kind binds controller-manager,
+#     scheduler, proxy and etcd to 127.0.0.1 *inside the node container*, so
+#     Prometheus cannot reach them and they sit permanently red on the targets page.
+#     Disabling them is the difference between an install that looks healthy and one
+#     that looks broken on first inspection.
+#
+# kube-state-metrics is deliberately left ON: it is small, and it is what makes the
+# stock Kubernetes dashboards in Grafana render at all.
+#
+# Grafana is at grafana.<DPL_DOMAIN> over plain HTTP — local has no cert-manager and
+# no wildcard TLS secret. The admin password is committed on purpose here: the
+# cluster is disposable and only reachable through the loopback port mappings in
+# deploy/clusters/kind/kind-ingress.yaml.
+
+grafana:
+  adminUser: admin
+  adminPassword: grafanapassword
+  persistence:
+    enabled: false
+  ingress:
+    enabled: true
+    ingressClassName: nginx
+    hosts:
+      - grafana.{{ requiredEnv "DPL_DOMAIN" }}
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+
+prometheus:
+  prometheusSpec:
+    # Discover ServiceMonitors / PodMonitors / rules from ALL namespaces regardless
+    # of the helm-release label, so the DMP ServiceMonitor (namespace dmp) is scraped
+    # even though it is created by a different chart. Same as homelab and aws.
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+    probeSelectorNilUsesHelmValues: false
+    retention: 2d
+    resources:
+      requests:
+        cpu: 100m
+        memory: 512Mi
+    # No storageSpec: absent means emptyDir, which is what we want here.
+
+alertmanager:
+  enabled: false
+
+nodeExporter:
+  enabled: false
+
+# Unreachable on Kind — see the header note.
+kubeControllerManager:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeProxy:
+  enabled: false
+kubeEtcd:
+  enabled: false

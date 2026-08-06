@@ -47,3 +47,14 @@ cluster-recreate:
         exit 1
         ;;
     esac
+
+# --- helmfile ----------------------------------------------------------------
+
+# Run helmfile against deploy/helmfile.yaml.gotmpl with the project env loaded.
+[group('helmfile')]
+hf *args:
+   #!/usr/bin/env bash
+   set -euo pipefail
+   source scripts/lib/env.sh
+
+   helmfile --file deploy/helmfile.yaml.gotmpl {{args}}
