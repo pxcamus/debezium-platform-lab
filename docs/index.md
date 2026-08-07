@@ -7,12 +7,6 @@ plumbing.
 This lab stands up the [Debezium Platform](https://debezium.io/documentation/reference/stable/operations/debezium-platform.html), 
 either empty, ready for you to explore and configure, or with a seeded demo database and a working pipeline, all with a couple simple commands.
 
-!!! warning "This site is a skeleton"
-
-    The structure is in place; the pages are being written. Until then the
-    [repository README](https://github.com/pxcamus/debezium-platform-lab) is the
-    authoritative instruction set.
-
 !!! info "Community project"
 
     Not affiliated with, or endorsed by, the Debezium project or Red Hat.
@@ -45,16 +39,11 @@ or onto a cluster you already run. [just](https://just.systems/man/en) recipes c
 abstract you from raw helm/kubernetes commands:
 
 ```shell
-just kind-recreate && just hf apply
+just kind-recreate && just apply
 ```
 
 and your platform is up-and-running with monitoring and observability built in with sensible defaults.
 
-**Planned:** a host-based path that runs the same platform directly on a machine with a
-container runtime, no Kubernetes involved. The pipelines, the UI and the resource
-definitions are identical either way — only the thing underneath them changes — so a
-pipeline built on one runs unmodified on the other. This is not available yet; the
-Kubernetes path is the only one that works today.
 **Planned:** a host-based path — the same pipelines on a machine with a container runtime,
 no Kubernetes involved.
 

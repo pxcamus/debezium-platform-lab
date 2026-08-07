@@ -4,12 +4,16 @@ Two commands: create the cluster, apply the releases. Ordering, waiting, and dep
 resolution are handled by the `helmfile` command.
 
 ```shell
+git clone https://github.com/pxcamus/debezium-platform-lab.git
+cd debezium-platform-lab
+
 cp .env.example .env
 just kind-recreate
 just apply
 ```
 
-Run these from the repository root — `.env` is resolved relative to it.
+Everything after the clone runs from the repository root — `.env`, the cluster config and the
+helmfile are all resolved relative to it.
 
 ## Configure
 

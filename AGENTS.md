@@ -231,6 +231,15 @@ edge pointing at a disabled release is not reliably a no-op.
    set outside both Helm and helmfile. It is homelab-only and slated to be folded into a gated release.
 6. **`.env` and `.env.example` may be unreadable to tooling** that denies dotenv paths; read the
    committed version with `git show HEAD:.env.example` instead.
-7. **`values/kube-prometheus-stack/` has no `hetzner.yaml.gotmpl`.** The release sets
+7. **`DPL_IMAGE_TAG` / `DPL_IMAGE_TAG_CONDUCTOR` are pinned to `nightly` on purpose — do not
+   "fix" them to a release version.** The `platform-conductor` and `platform-stage` version
+   tags are published amd64-only (checked 2026-07); only `nightly` is multi-arch. Pinning a
+   release tag therefore works on an x86 CI runner and fails on Apple Silicon, arm64
+   homelab hardware and arm cloud instances, with an `exec format error` or a no-match-for-
+   platform pull failure rather than anything naming the tag. Everything else on the default
+   path publishes both architectures. Related: Microsoft ships no arm64 SQL Server image at
+   all (Azure SQL Edge, the historical stand-in, was retired 2025-09-30), so the `sqlserver`
+   component needs an amd64 cluster.
+8. **`values/kube-prometheus-stack/` has no `hetzner.yaml.gotmpl`.** The release sets
    `missingFileHandler: Warn`, so hetzner installs with chart defaults rather than failing. Renders
    fine, but nobody chose that configuration.

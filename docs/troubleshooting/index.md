@@ -1,13 +1,13 @@
 # Troubleshooting
 
-Every preflight and deployment check has a stable identifier. When a check fails it prints
-the identifier and a link straight to the section below that explains it. You should not
-have to search this page.
+Every deployment check has a stable identifier. When a check fails it prints the identifier
+and a link straight to the section below that explains it. You should not have to search
+this page.
 
 !!! warning "Placeholder"
 
-    The sections below are stubs, and the identifiers are provisional until the preflight
-    command lands. They are listed now so the command and the documentation grow together.
+    The sections below are stubs and the identifiers are provisional. They are listed now
+    so the checks and the documentation grow together.
 
 ## The contract
 
@@ -62,14 +62,6 @@ the cluster, the deployment succeeds and nothing is reachable.
 
 <!-- TODO -->
 
-## Exported shell variables override the environment file { #env-shadowing }
-
-Variables already exported in your shell take precedence over the environment file, which
-is loaded without overriding. A stale exported value silently changes which image tag is
-deployed, or which cluster is targeted, with no warning anywhere.
-
-<!-- TODO -->
-
 ## Wrong cluster targeted { #cluster-mismatch }
 
 The resolved kubeconfig and context do not match the environment you selected. This is the
@@ -81,6 +73,16 @@ check most worth reading before a deployment rather than after.
 
 Registry unreachable, rate-limited, or the requested tag does not exist for your CPU
 architecture.
+
+The architecture case is the one that looks like something else. `deploy/environment/versions.env`
+pins `DPL_IMAGE_TAG` and `DPL_IMAGE_TAG_CONDUCTOR` to `nightly` because the
+`platform-conductor` and `platform-stage` *version* tags are published amd64-only — only
+`nightly` is multi-arch. On Apple Silicon or any arm64 machine, changing those pins to a
+release version gives you a pull failure or an `exec format error` that never mentions the
+tag you changed. If you have overridden either variable in `.env`, put it back.
+
+Microsoft publishes no arm64 SQL Server image at all, so the `sqlserver` component needs an
+amd64 cluster regardless of tags.
 
 <!-- TODO -->
 
@@ -95,5 +97,15 @@ established. The errors name missing kinds rather than the ordering problem that
 
 ## Still stuck
 
-Open an issue with the output of the preflight command and the deployment logs:
-[github.com/pxcamus/debezium-platform-lab/issues](https://github.com/pxcamus/debezium-platform-lab/issues).
+Open an issue at
+[github.com/pxcamus/debezium-platform-lab/issues](https://github.com/pxcamus/debezium-platform-lab/issues)
+with enough to reproduce:
+
+```shell
+just releases          # what the helmfile intends to install
+just hf list           # the same, including the releases that are gated off
+kubectl get pods -A
+```
+
+Plus the failing command's output, your `DPL_ENV`, and `env | grep DPL_`. Redact real
+secrets.

@@ -6,7 +6,7 @@ Reproducible, environment-agnostic automation for running the [Debezium Platform
 
 > A community project. Not affiliated with, or endorsed by, the Debezium project or Red Hat.
 
-It provisions a change-data-capture (CDC) stack — Kafka (Strimzi), PostgreSQL (CloudNativePG), MongoDB, and more to come, the Debezium Operator and the Debezium Platform — and ships the JSON payloads that define connections, sources, destinations and pipelines for the Debezium Platform API.
+It provisions a change-data-capture (CDC) stack — web UI to configure Kafka (Strimzi), PostgreSQL (CloudNativePG), MongoDB, and more to come, the Debezium Operator and the Debezium Platform with monitoring.
 
 Defaults target a local Kind cluster. Passwords in the Helm charts and `.env.example` are non-secret demo values.
 
@@ -21,6 +21,9 @@ Defaults target a local Kind cluster. Passwords in the Helm charts and `.env.exa
 ## Quick start (local Kind)
 
 ```bash
+git clone https://github.com/pxcamus/debezium-platform-lab.git
+cd debezium-platform-lab
+
 cp .env.example .env
 just kind-recreate
 just apply
