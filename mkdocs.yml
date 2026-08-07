@@ -50,7 +50,7 @@ theme:
 plugins:
   - search:
       # Splits on code punctuation AND at camelCase boundaries, so `kubeContext`,
-      # `DBZ_ENV`, and `cluster:recreate` are each findable by their parts.
+      # `DPL_ENV`, and `cluster:recreate` are each findable by their parts.
       separator: '[\s\-,:!=\[\]()"/]+|(?!\b)(?=[A-Z][a-z])|\.(?!\d)|&[lg]t;'
   - awesome-nav:
       logs:

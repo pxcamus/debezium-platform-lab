@@ -1,0 +1,13 @@
+{
+  "name": "${DPL_DMP_RESOURCE_PREFIX}-${DPL_DMP_ENVIRONMENT}-mongo-extract-doc",
+  "description": "Generic MongoDB extract new document state transform",
+  "type": "io.debezium.connector.mongodb.transforms.ExtractNewDocumentState",
+  "schema": "schema321",
+  "vaults": [],
+  "config": {},
+  "predicate": {
+    "type": null,
+    "config": null,
+    "negate": false
+  }
+}

@@ -7,18 +7,26 @@ land in `main`.
 
 ## Development setup
 
-Install the tooling listed in the [README prerequisites](README.md#prerequisites)
-(Go 1.26+, mage, helm + helmfile, kind, kubectl, Docker), then:
+Install the tooling listed in the
+[documentation prerequisites](https://lab.1int.io/getting-started/prerequisites/)
+(just, helm + helmfile, kind, kubectl, Docker), then:
 
 ```bash
-cp .env.example .env      # required — mage targets and validate-helm.sh load it
-mage -l                   # list available targets
+cp .env.example .env       # host-specific values and secrets
+scripts/validate-helm.sh   # offline check that every chart still renders
 ```
 
-`.env` is git-ignored and **required**: mage targets call `automation.LoadEnv()`
-and `scripts/validate-helm.sh` sources it, so without it required variables such
-as `DBZ_VERSION` are missing. The passwords in the Helm charts and `.env.example`
-are non-secret demo values — never commit real secrets.
+`.env` is git-ignored. It layers over
+[`deploy/environment/versions.env`](deploy/environment/versions.env), which
+carries the shared version pins, so a checkout without `.env` still renders —
+that is how CI runs. Put host-specific values and secrets in `.env` and version
+pins in `versions.env`, never the reverse. The passwords in the Helm charts and
+`.env.example` are non-secret demo values — never commit real secrets.
+
+> **No Go, no `mage`.** The Go library, the mage task runner and the `dmp-lab`
+> CLI were removed; the toolchain is now [`just`](https://just.systems/) over
+> `helmfile`. This repository is charts, helmfile releases, JSON payloads, shell
+> and docs. `just --list` shows every task.
 
 ## Branching and pull requests
 
@@ -26,7 +34,7 @@ are non-secret demo values — never commit real secrets.
 request; direct pushes to `main` are not accepted.
 
 ```bash
-git checkout -b <type>/<short-description>   # e.g. fix/scenario-loader-name
+git checkout -b <type>/<short-description>   # e.g. fix/otel-webhook-certs
 # ... make your changes ...
 git push -u origin <type>/<short-description>
 gh pr create --fill
@@ -45,40 +53,50 @@ Suggested branch/commit prefixes: `feat/`, `fix/`, `docs/`, `chore/`, `refactor/
 
 ## Before you open a PR
 
-Run the same checks CI runs, locally:
+Run the same checks CI runs, locally. None of them need a cluster:
 
 ```bash
-gofmt -l .                 # should print nothing
-go vet ./...
-go build ./...
-go run github.com/magefile/mage -l   # compiles the mage-tagged magefile
-scripts/validate-helm.sh   # offline Helm chart + helmfile validation
+scripts/validate-helm.sh                                    # charts, gating, every environment
+scripts/validate-env.sh                                     # env-var consistency
+shellcheck scripts/*.sh scripts/lab/*.sh scripts/lib/*.sh
+just --fmt --check --unstable                               # justfile formatting
 ```
 
 CI enforces these on every PR:
 
-- **Go** ([`.github/workflows/go.yaml`](.github/workflows/go.yaml)) — gofmt,
-  `go vet`, `go build`, `go mod tidy` check, and a magefile compile, on any `*.go`
-  / `go.mod` / `go.sum` change.
+- **Toolchain** ([`.github/workflows/toolchain.yaml`](.github/workflows/toolchain.yaml)) —
+  shellcheck, `bash -n`, `just --fmt --check`, `just --list` and `validate-env.sh`.
+  No path filter: it runs on every PR, including docs-only ones.
 - **Helm validation** ([`.github/workflows/helm-validation.yaml`](.github/workflows/helm-validation.yaml)) —
-  `helm lint` / `template` and `helmfile lint` / `template` through `kubeconform`,
-  on any change under `deploy/`.
+  `scripts/validate-helm.sh`: `helmfile lint`, the release-gating assertions, and a
+  `template` of every environment through `kubeconform`. Runs on any change under
+  `deploy/`; reports a trivial pass otherwise, so the required check never blocks an
+  unrelated PR.
+- **Docs** ([`.github/workflows/docs.yaml`](.github/workflows/docs.yaml)) — MkDocs
+  builds `docs/` and publishes to [lab.1int.io](https://lab.1int.io/).
 
-## Coding conventions
+If `just --fmt --check` fails, `just --fmt --unstable` fixes it in place.
 
-These match the existing codebase (see [`CLAUDE.md`](CLAUDE.md) for the full set):
+## Conventions
 
-- **`NewFromEnv()`** factory pattern: read env vars, build config, call `New()`.
-- Env access via `automation.Env(name, fallback)` /
-  `automation.RequiredEnv(name)`; paths via `automation.ExpandPath(path)`.
-- Structured logging with `log/slog` via `slog.Default()`.
-- Wrap errors with `fmt.Errorf("...: %w", err)`.
-- No inline comments — only Go doc comments on exported symbols.
+See [`AGENTS.md`](AGENTS.md) for the full set:
+
+- Values files are per-component and per-environment:
+  `deploy/values/<component>/<DPL_ENV>.yaml.gotmpl`.
+- Prefer adding a values layer over forking a chart.
+- Version pins go in `versions.env`, secrets and host overrides in `.env`.
+- **Every new release needs an explicit `installed:` gate.** Helmfile defaults it to
+  `true`, so a release added without one installs for everybody — either gate it on
+  `DPL_ENV` (how to configure) or on a `.Values.components` key (what to install).
+  `scripts/validate-helm.sh` asserts the default install is exactly four releases and
+  will fail if you add a fifth.
+- Run `just --fmt --unstable` after editing the `justfile`; CI checks it.
 - All DMP JSON payloads must have a `"name"` field; `${ENV_VAR}` in payloads is
-  expanded at load time.
+  expanded at load time, and a missing variable becomes an empty string rather
+  than an error.
 
 ## Reporting issues
 
-Open a GitHub issue with enough detail to reproduce: the mage target or command
-you ran, your `DBZ_ENV` / `CLUSTER_TYPE`, and the relevant log output (set
-`LOG_LEVEL=debug` for more). Please redact any real secrets.
+Open a GitHub issue with enough detail to reproduce: the command you ran, your
+`DPL_ENV` / `DPL_CLUSTER_TYPE`, and the relevant output. Please redact any real
+secrets.

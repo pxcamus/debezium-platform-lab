@@ -1,0 +1,7 @@
+{
+  "name": "${DPL_DMP_RESOURCE_PREFIX}-${DPL_DMP_ENVIRONMENT}-mongodb",
+  "type": "MONGODB",
+  "config": {
+    "connection.string": "${DPL_DMP_MONGODB_CONNECTION_STRING}"
+  }
+}

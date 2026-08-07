@@ -1,12 +1,12 @@
 # Zot OCI registry — homelab (k3s + public wildcard TLS via cert-manager)
 #
 # Wired into deploy/helmfile.yaml.gotmpl as the `zot` release, gated on
-# DBZ_ENV=homelab. Applied via:
+# DPL_ENV=homelab. Applied via:
 #   helmfile --file deploy/helmfile.yaml.gotmpl --selector app=zot apply
 # (or as part of --selector infra=true). Standalone equivalent:
-#   DBZ_DOMAIN=<your-zone> helmfile ... --selector app=zot apply
+#   DPL_DOMAIN=<your-zone> helmfile ... --selector app=zot apply
 #
-# The ingress host and TLS secret are derived from DBZ_DOMAIN (registry.<zone>,
+# The ingress host and TLS secret are derived from DPL_DOMAIN (registry.<zone>,
 # wildcard-<zone-with-dashes>-tls). The htpasswd hash is still a placeholder here —
 # supply it (and any arm64 image override) from deploy/values/zot/homelab.secret.yaml,
 # a git-ignored overlay (matched by deploy/values/**/*.secret.yaml) layered on top of
@@ -90,10 +90,10 @@ ingress:
   className: traefik
   pathtype: Prefix
   hosts:
-    - host: registry.{{ requiredEnv "DBZ_DOMAIN" }}
+    - host: registry.{{ requiredEnv "DPL_DOMAIN" }}
       paths:
         - path: /
   tls:
-    - secretName: wildcard-{{ requiredEnv "DBZ_DOMAIN" | replace "." "-" }}-tls
+    - secretName: wildcard-{{ requiredEnv "DPL_DOMAIN" | replace "." "-" }}-tls
       hosts:
-        - registry.{{ requiredEnv "DBZ_DOMAIN" }}
+        - registry.{{ requiredEnv "DPL_DOMAIN" }}

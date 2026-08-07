@@ -1,23 +1,20 @@
 # Get running
 
-One path, no choices: a local Kind cluster running the platform with a seeded PostgreSQL
-source, ending in a pipeline you can watch move data. Deploying elsewhere is a
-[guide](../guides/index.md), not a fork in this road.
+The default deployment gives you a local Kind cluster running the platform plus monitoring — Prometheus, Grafana, the otel operator, ingress-nginx. 
+More comprehensive examples and deployments on Kubernetes infrastructure are documented in the [guide](../guides/index.md).
 
-!!! warning "Placeholder"
+!!! warning "Partly written"
 
-    This page is a skeleton. Follow the
-    [README quick start](https://github.com/pxcamus/debezium-platform-lab#quick-start-local-kind)
-    until it is written.
+    Steps 1 and 2 are written. Step 3 — the first pipeline — is still a skeleton, because
+    the seeding and scenario runners are being rebuilt.
 
 ## The three steps
 
-1. **[Check your machine](doctor.md)** — one command tells you what is missing and how to
-   install it. Nothing else on this path asks you to install anything.
-2. **[Deploy the stack](deploy.md)** — create the cluster and apply every release in
-   dependency order.
-3. **[Run your first pipeline](first-pipeline.md)** — seed the demo database, create the
-   platform resources, and watch change events arrive.
+1. **[Prerequisites](prerequisites.md)** — five tools and a container runtime. Nothing else
+   on this path asks you to install anything.
+2. **[Deploy the stack](deploy.md)** — two commands: create the cluster, apply the releases.
+3. **[Run your first pipeline](first-pipeline.md)** — connect to your sources and destinations, create your first 
+   data pipeline, and watch change events arrive.
 
 ## What this costs you
 

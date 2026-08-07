@@ -1,0 +1,36 @@
+# OpenTelemetry Operator — self-signed admission webhook certs
+#
+# Deliberately NOT named after an environment. This file answers a single yes/no
+# question — does this cluster have cert-manager? — and the answer is "no" for every
+# environment except homelab. Naming it aws.yaml / local.yaml / hetzner.yaml would
+# imply per-environment variation that does not exist, and would leave each new
+# environment silently falling back to the broken default.
+#
+# Referenced from deploy/helmfile.yaml.gotmpl under the inverse condition:
+#
+#   {{- if ne (env "DPL_ENV" | default "local") "homelab" }}
+#       values:
+#         - values/opentelemetry-operator/self-signed.yaml
+#   {{- end }}
+#
+# WHAT IT FIXES
+#   The operator's mutating/validating admission webhooks need TLS certs. The chart
+#   defaults to admissionWebhooks.certManager.enabled=true, which requires a
+#   cert-manager install to issue them. Only homelab has one (see the cert-manager
+#   release, gated on DPL_ENV=homelab), so everywhere else the webhook Deployment
+#   never becomes Ready.
+#
+#   That failure is worth recognising because it does not look like a cert problem:
+#   the repo-wide helmDefaults set wait:true and atomic:true, so helm blocks on the
+#   never-Ready webhook and then rolls the release back. You are left with no
+#   operator, no error mentioning certificates, and an OpenTelemetryCollector CR
+#   from debezium-platform that nothing reconciles.
+#
+#   Setting autoGenerateCert lets the chart's own Helm hook mint a self-signed cert
+#   instead. The cert is regenerated on reinstall, which is fine — it is only ever
+#   presented to the API server for webhook calls.
+admissionWebhooks:
+  certManager:
+    enabled: false
+  autoGenerateCert:
+    enabled: true

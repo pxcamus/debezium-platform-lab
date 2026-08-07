@@ -1,3 +1,23 @@
+{{- /* Two orthogonal axes decide what installs:
+         DPL_ENV            — HOW to configure: domains, TLS, sizing, ingress controller.
+         .Values.components — WHAT to install, supplied by --state-values-file (repeatable).
+                              Default false, so a bare invocation is the base install:
+                              the platform, its operator and monitoring, nothing else.
+       Note --file is NOT repeatable (last one wins, silently), which is why component
+       selection rides on state values rather than a second helmfile. */ -}}
+  {{- $v := .Values | default dict }}
+  {{- $operatorMode    := env "DPL_OPERATOR_MODE" | default "bundled" }}
+  {{- $bundledOperator := eq $operatorMode "bundled" }}
+  {{- $postgres     := dig "components" "postgres"      false $v }}
+  {{- $mongodb      := dig "components" "mongodb"       false $v }}
+  {{- $sqlserver    := dig "components" "sqlserver"     false $v }}
+  {{- $kafka        := dig "components" "kafka"         false $v }}
+  {{- $kafkaUI      := dig "components" "kafka-ui"      false $v }}
+  {{- $kafkaConnect := dig "components" "kafka-connect" false $v }}
+  {{- $httpServer   := dig "components" "http-server"   false $v }}
+  {{- $cdcDashboard := dig "components" "cdc-dashboard" false $v }}
+  {{- $apicurio     := dig "components" "apicurio"      false $v }}
+
 helmDefaults:
   wait: true
   timeout: 120
@@ -42,7 +62,7 @@ releases:
     namespace: ingress-nginx
     createNamespace: true
     chart: ingress-nginx/ingress-nginx
-    installed: {{ eq (env "DBZ_ENV" | default "local") "local" }}
+    installed: {{ eq (env "DPL_ENV" | default "local") "local" }}
     labels:
       app: ingress-nginx
       component: ingress
@@ -55,43 +75,49 @@ releases:
     namespace: cert-manager
     createNamespace: true
     chart: jetstack/cert-manager
-    installed: {{ eq (env "DBZ_ENV" | default "local") "homelab" }}
+    installed: {{ eq (env "DPL_ENV" | default "local") "homelab" }}
     labels:
       app: cert-manager
       component: cert-manager
       infra: "true"
     values:
-      - values/cert-manager/{{ env "DBZ_ENV" | default "local" }}.yaml
+      - values/cert-manager/{{ env "DPL_ENV" | default "local" }}.yaml
 
   - name: cert-manager-webhook-gandi
     namespace: cert-manager
     createNamespace: true
     chart: cert-manager-webhook-gandi/cert-manager-webhook-gandi
-    installed: {{ eq (env "DBZ_ENV" | default "local") "homelab" }}
+    installed: {{ eq (env "DPL_ENV" | default "local") "homelab" }}
     labels:
       app: cert-manager-webhook-gandi
       component: cert-manager-webhook-gandi
       infra: "true"
     values:
-      - values/cert-manager-webhook-gandi/{{ env "DBZ_ENV" | default "homelab" }}.yaml
+      - values/cert-manager-webhook-gandi/{{ env "DPL_ENV" | default "homelab" }}.yaml
 
   # OCI registry (zot), homelab only. Fronted by Traefik with the wildcard TLS
   # secret that already lives in the `registry` namespace. The real host + cert
   # secret name + htpasswd hash come from values/zot/homelab.secret.yaml, which is
-  # git-ignored (see .gitignore) and only referenced when DBZ_ENV=homelab.
+  # git-ignored (see .gitignore) and only referenced when DPL_ENV=homelab.
   - name: zot
     namespace: registry
     createNamespace: true
     chart: project-zot/zot
     version: 0.1.121
-    installed: {{ eq (env "DBZ_ENV" | default "local") "homelab" }}
+    installed: {{ eq (env "DPL_ENV" | default "local") "homelab" }}
+    # The secret overlay carries the real host and the htpasswd hash, so it is
+    # git-ignored (.gitignore: deploy/values/**/*.secret.yaml) and absent from a fresh
+    # checkout. Warn rather than Error so `scripts/validate-helm.sh` can render homelab
+    # in CI — structure is what CI validates, credentials are not. A homelab DEPLOY
+    # still needs the file: without it the chart falls back to an open registry.
+    missingFileHandler: Warn
     labels:
       app: zot
       component: registry
       infra: "true"
     values:
       - values/zot/homelab.yaml.gotmpl
-{{- if eq (env "DBZ_ENV" | default "local") "homelab" }}
+{{- if eq (env "DPL_ENV" | default "local") "homelab" }}
       - values/zot/homelab.secret.yaml
 {{- end }}
 
@@ -99,6 +125,7 @@ releases:
     namespace: kafka
     createNamespace: true
     chart: oci://quay.io/strimzi-helm/strimzi-kafka-operator
+    installed: {{ $kafka }}
     labels:
       app: strimzi-cluster-operator
       component: kafka-operator
@@ -108,6 +135,7 @@ releases:
     namespace: kafka
     createNamespace: true
     chart: ./charts/kafka-cluster
+    installed: {{ $kafka }}
     labels:
       app: kafka-cluster
       component: kafka
@@ -115,23 +143,25 @@ releases:
     needs:
       - kafka/strimzi-cluster-operator
 
-#  - name: kafka-connect
-#    namespace: kafka
-#    createNamespace: true
-#    chart: ./charts/kafka-connect
-#    labels:
-#      app: kafka-connect
-#      component: kafka-connect
-#      infra: "true"
-#      cdc: "true"
-#    needs:
-#      - kafka/kafka-cluster
-#      - databases/postgresql-cluster
+  - name: kafka-connect
+    namespace: kafka
+    createNamespace: true
+    chart: ./charts/kafka-connect
+    installed: {{ $kafkaConnect }}
+    labels:
+      app: kafka-connect
+      component: kafka-connect
+      infra: "true"
+      cdc: "true"
+    needs:
+      - kafka/kafka-cluster
+      - databases/postgresql-cluster
 
   - name: kafbat-ui
     namespace: kafka
     createNamespace: true
     chart: kafbat-ui/kafka-ui
+    installed: {{ $kafkaUI }}
     labels:
       app: kafbat-ui
       component: kafka-ui
@@ -145,6 +175,7 @@ releases:
     namespace: databases
     createNamespace: true
     chart: cloudnative-pg/cloudnative-pg
+    installed: {{ $postgres }}
     labels:
       app: cnpg-operator
       component: postgres-operator
@@ -154,6 +185,7 @@ releases:
     namespace: databases
     createNamespace: true
     chart: ./charts/postgresql-cluster
+    installed: {{ $postgres }}
     labels:
       app: postgresql-cluster
       component: postgres
@@ -165,6 +197,7 @@ releases:
     namespace: databases
     createNamespace: true
     chart: mongodb/community-operator
+    installed: {{ $mongodb }}
     labels:
       app: mongodb-community-operator
       component: mongodb-operator
@@ -176,6 +209,7 @@ releases:
     namespace: databases
     createNamespace: true
     chart: ./charts/mongodb-replica-set
+    installed: {{ $mongodb }}
     labels:
       app: mongodb-replica-set
       component: mongodb
@@ -185,36 +219,39 @@ releases:
 
   - name: mssql
     namespace: databases
-    createNamespace: false
+    createNamespace: true
     chart: ./charts/mssql
+    installed: {{ $sqlserver }}
     labels:
       app: mssql
       component: mssql
       infra: "false"
     values:
-      - values/mssql/{{ env "DBZ_ENV" | default "local" }}.yaml
+      - values/mssql/{{ env "DPL_ENV" | default "local" }}.yaml
 
   - name: http-server
     namespace: tools
     createNamespace: true
     chart: ./charts/http-server
+    installed: {{ $httpServer }}
     labels:
       app: http-server
       component: mock-server
       infra: "true"
     values:
-      - values/http-server/{{ env "DBZ_ENV" | default "local" }}.yaml
+      - values/http-server/{{ env "DPL_ENV" | default "local" }}.yaml
 
   - name: cdc-dashboard
     namespace: tools
     createNamespace: true
     chart: ./charts/cdc-dashboard
+    installed: {{ $cdcDashboard }}
     labels:
       app: cdc-dashboard
       component: cdc-dashboard
       infra: "false"
     values:
-      - values/cdc-dashboard/{{ env "DBZ_ENV" | default "local" }}.yaml
+      - values/cdc-dashboard/{{ env "DPL_ENV" | default "local" }}.yaml
     needs:
       - databases/mongodb-replica-set
 
@@ -222,12 +259,13 @@ releases:
     namespace: apicurio
     createNamespace: true
     chart: ./charts/apicurio-registry
+    installed: {{ $apicurio }}
     labels:
       app: apicurio-registry
       component: schema-registry
       infra: "false"
     values:
-      - values/apicurio/{{ env "DBZ_ENV" | default "local" }}.yaml.gotmpl
+      - values/apicurio/{{ env "DPL_ENV" | default "local" }}.yaml.gotmpl
     needs:
       - databases/postgresql-cluster
 
@@ -243,34 +281,47 @@ releases:
     namespace: monitoring
     createNamespace: true
     chart: prometheus-community/kube-prometheus-stack
-    version: '{{ requiredEnv "KUBE_PROMETHEUS_STACK_VERSION" }}'
-    installed: {{ or (eq (env "DBZ_ENV" | default "local") "homelab") (eq (env "DBZ_ENV" | default "local") "aws") }}
+    version: '{{ requiredEnv "DPL_KUBE_PROMETHEUS_STACK_VERSION" }}'
+    installed: true
+    missingFileHandler: Warn
     timeout: 600
     labels:
       app: kube-prometheus-stack
       component: monitoring
       infra: "true"
     values:
-      - values/kube-prometheus-stack/{{ env "DBZ_ENV" | default "local" }}.yaml.gotmpl
+      - values/kube-prometheus-stack/{{ env "DPL_ENV" | default "local" }}.yaml.gotmpl
+{{- if eq (env "DPL_ENV" | default "local") "local" }}
+    # Grafana's Ingress must not be created while nginx's admission webhook is
+    # registered but its controller is still starting — the API server calls the
+    # webhook, gets connection refused, and atomic rolls the whole stack back.
+    # helmDefaults.wait makes this edge sufficient: nginx is Ready, not merely applied.
+    # Conditional because ingress-nginx only installs on local (homelab fronts with
+    # Traefik), and an edge to a disabled release is not reliably a no-op.
+    needs:
+      - ingress-nginx/ingress-nginx
+{{- end }}
 
   # OpenTelemetry Operator — reconciles the OpenTelemetryCollector CR that the
   # debezium-platform chart creates when monitoring.otel.enabled=true. In homelab
   # cert-manager is present, so the operator's admission-webhook certs work with
-  # no extra config. On aws there is no cert-manager, so values/opentelemetry-operator/aws.yaml
-  # switches the webhook to a self-signed auto-generated cert instead.
+  # no extra config. Everywhere else there is no cert-manager and the chart would emit a
+  # cert-manager Issuer + Certificate the cluster cannot resolve, so
+  # values/opentelemetry-operator/self-signed.yaml switches the webhook to a
+  # self-signed auto-generated cert instead.
   - name: opentelemetry-operator
     namespace: monitoring
     createNamespace: true
     chart: open-telemetry/opentelemetry-operator
-    version: '{{ requiredEnv "OTEL_OPERATOR_VERSION" }}'
-    installed: {{ or (eq (env "DBZ_ENV" | default "local") "homelab") (eq (env "DBZ_ENV" | default "local") "aws") }}
+    version: '{{ requiredEnv "DPL_OTEL_OPERATOR_VERSION" }}'
+    installed: true
     labels:
       app: opentelemetry-operator
       component: monitoring
       infra: "true"
-{{- if eq (env "DBZ_ENV" | default "local") "aws" }}
+{{- if ne (env "DPL_ENV" | default "local") "homelab" }}
     values:
-      - values/opentelemetry-operator/aws.yaml
+      - values/opentelemetry-operator/self-signed.yaml
 {{- end }}
 
   # Identity / SSO (homelab only) — Keycloak via the official Operator, treated
@@ -291,7 +342,7 @@ releases:
     namespace: identity
     createNamespace: true
     chart: ./charts/keycloak-operator
-    installed: {{ eq (env "DBZ_ENV" | default "local") "homelab" }}
+    installed: {{ eq (env "DPL_ENV" | default "local") "homelab" }}
     timeout: 300
     labels:
       app: keycloak-operator
@@ -302,7 +353,7 @@ releases:
     namespace: identity
     createNamespace: true
     chart: ./charts/keycloak-db
-    installed: {{ eq (env "DBZ_ENV" | default "local") "homelab" }}
+    installed: {{ eq (env "DPL_ENV" | default "local") "homelab" }}
     timeout: 300
     labels:
       app: keycloak-db
@@ -315,7 +366,7 @@ releases:
     namespace: identity
     createNamespace: true
     chart: ./charts/keycloak
-    installed: {{ eq (env "DBZ_ENV" | default "local") "homelab" }}
+    installed: {{ eq (env "DPL_ENV" | default "local") "homelab" }}
     timeout: 600
     # Do NOT roll back on failure: this release includes a cert-manager Certificate,
     # and helm --wait blocks on it. If issuance lags (DNS-01) past the timeout, the
@@ -334,9 +385,9 @@ releases:
       - identity/keycloak-db
 
   # SSO Phase 2 learning app (homelab only) — a tiny Go service protected by OIDC
-  # against the dmp realm, at oidc-demo.${DBZ_DOMAIN}. Image built from the separate
+  # against the dmp realm, at oidc-demo.${DPL_DOMAIN}. Image built from the separate
   # oidc-demo repo and pushed to zot. No `needs:` on keycloak: the app reaches
-  # Keycloak over the public URL (auth.${DBZ_DOMAIN}), not an in-cluster Service, so
+  # Keycloak over the public URL (auth.${DPL_DOMAIN}), not an in-cluster Service, so
   # there is no hard ordering dependency. Like `keycloak` it bundles a cert-manager
   # Certificate and inherits wait:true, so atomic:false — a lagging DNS-01 issuance
   # must not roll back an otherwise-healthy app (see keycloak stanza / Phase 1 Issue 4).
@@ -344,7 +395,7 @@ releases:
     namespace: tools
     createNamespace: true
     chart: ./charts/oidc-demo
-    installed: {{ eq (env "DBZ_ENV" | default "local") "homelab" }}
+    installed: {{ eq (env "DPL_ENV" | default "local") "homelab" }}
     timeout: 300
     atomic: false
     labels:
@@ -354,7 +405,7 @@ releases:
     values:
       - values/oidc-demo/homelab.yaml.gotmpl
 
-  # SSO Phase 3 — oauth2-proxy fronts dmp.${DBZ_DOMAIN} (stage UI + conductor /api) with a
+  # SSO Phase 3 — oauth2-proxy fronts dmp.${DPL_DOMAIN} (stage UI + conductor /api) with a
   # Keycloak login via Traefik ForwardAuth, handing the conductor a bearer it validates as
   # an OIDC resource server. Temporary bridge until stage speaks OIDC natively.
   # needs keycloak: oauth2-proxy fetches the realm's OIDC discovery at startup and won't go
@@ -364,8 +415,8 @@ releases:
     namespace: identity
     createNamespace: true
     chart: oauth2-proxy/oauth2-proxy
-    version: '{{ requiredEnv "OAUTH2_PROXY_CHART_VERSION" }}'
-    installed: {{ eq (env "DBZ_ENV" | default "local") "homelab" }}
+    version: '{{ requiredEnv "DPL_OAUTH2_PROXY_CHART_VERSION" }}'
+    installed: {{ eq (env "DPL_ENV" | default "local") "homelab" }}
     timeout: 300
     atomic: false
     labels:
@@ -378,42 +429,48 @@ releases:
       - identity/keycloak
 
   - name: debezium-operator
-    namespace: '{{ env "DBZ_NAMESPACE" | default "dmp" }}'
+    namespace: '{{ env "DPL_NAMESPACE" | default "dmp" }}'
     createNamespace: true
+    installed: {{ not $bundledOperator }}
     chart: debezium/debezium-operator
-    version: '{{ requiredEnv "DBZ_VERSION" }}'
+    version: '{{ requiredEnv "DPL_DEBEZIUM_VERSION" }}'
     labels:
       app: debezium-operator
       component: operator
-    # The operator image is pinned independently of the chart version (DBZ_VERSION).
+    # The operator image is pinned independently of the chart version (DPL_DEBEZIUM_VERSION).
     # The platform (conductor/stage) only publishes arm64 on `nightly`, so on the
     # erebor arm64 homelab we must run nightly conductor/stage — and the operator +
     # its DebeziumServer CRD must match that nightly line, or the operator fails to
     # deserialize the CRs the nightly conductor emits (e.g. runtime.metrics.otel
     # metricExportIntervalMs, added after 3.6.0). Vendor the matching nightly CRD via
-    # scripts (see docs). Default nightly; override with DBZ_OPERATOR_TAG.
+    # scripts (see docs). Default nightly; override with DPL_DEBEZIUM_OPERATOR_TAG.
     set:
       - name: image
-        value: quay.io/debezium/operator:{{ env "DBZ_OPERATOR_TAG" | default "nightly" }}
+        value: quay.io/debezium/operator:{{ env "DPL_DEBEZIUM_OPERATOR_TAG" | default "nightly" }}
 
   - name: debezium-platform
-    namespace: '{{ env "DBZ_NAMESPACE" | default "dmp" }}'
+    namespace: '{{ env "DPL_NAMESPACE" | default "dmp" }}'
     createNamespace: true
     # Vendored from the debezium-platform repo's helm/ (branch build) rather than the
     # published debezium/debezium-platform chart, because it carries the conductor.oidc
     # block the homelab SSO demo needs (not yet in the released chart). Re-sync from
     # ../debezium-platform/helm when that lands upstream, then switch back to the repo
-    # chart + DBZ_VERSION. Local path ⇒ no version pin (Chart.yaml is 0.0.1).
+    # chart + DPL_DEBEZIUM_VERSION. Local path ⇒ no version pin (Chart.yaml is 0.0.1).
     chart: ./charts/debezium-platform
+    needs:
+      - monitoring/kube-prometheus-stack
+      - monitoring/opentelemetry-operator
     labels:
       app: debezium-platform
       component: platform
     values:
-      - values/dmp/{{ env "DBZ_ENV" | default "local" }}.yaml.gotmpl
+      - values/dmp/{{ env "DPL_ENV" | default "local" }}.yaml.gotmpl
     set:
       - name: conductor.image
-        value: {{ env "DBZ_IMAGE_REGISTRY_CONDUCTOR" | default "quay.io" }}/debezium/platform-conductor:{{ env "DBZ_IMAGE_TAG_CONDUCTOR" | default "nightly" }}
+        value: {{ env "DPL_IMAGE_REGISTRY_CONDUCTOR" | default "quay.io" }}/debezium/platform-conductor:{{ env "DPL_IMAGE_TAG_CONDUCTOR" | default "nightly" }}
       - name: stage.image
-        value: {{ env "DBZ_IMAGE_REGISTRY" | default "quay.io" }}/debezium/platform-stage:{{ env "DBZ_IMAGE_TAG" | default "nightly" }}
+        value: {{ env "DPL_IMAGE_REGISTRY" | default "quay.io" }}/debezium/platform-stage:{{ env "DPL_IMAGE_TAG" | default "nightly" }}
       - name: conductor.descriptors.official.tag
-        value: {{ env "DBZ_IMAGE_TAG" | default "nightly" }}
+        value: {{ env "DPL_IMAGE_TAG" | default "nightly" }}
+      - name: debezium-operator.enabled
+        value: {{ $bundledOperator }}

@@ -2,7 +2,7 @@
 # sets it natively from monitoring.otel (templates/_helpers.tpl otelCollectorEndpoint).
 # Re-adding it produces a duplicate env key that server-side apply rejects.
 domain:
-  name: dmp.{{ requiredEnv "DBZ_DOMAIN" }}
+  name: dmp.{{ requiredEnv "DPL_DOMAIN" }}
   # oauth2-proxy terminates TLS in front and the chart ingress is disabled below, so the
   # scheme can't be derived from ingress.tls — force https or the stage SPA calls the API
   # over http:// and the browser blocks it as mixed content.
@@ -10,7 +10,7 @@ domain:
 database:
   enabled: true
 ingress:
-  # Disabled — oauth2-proxy owns the dmp.${DBZ_DOMAIN} ingress. It reverse-proxies to the
+  # Disabled — oauth2-proxy owns the dmp.${DPL_DOMAIN} ingress. It reverse-proxies to the
   # stage + conductor Services and runs the Keycloak login in front, so a separate chart
   # ingress here would just collide on the same host. See values/oauth2-proxy/homelab.yaml.gotmpl.
   enabled: false
@@ -20,10 +20,10 @@ conductor:
   imagePullPolicy: Always
   # OIDC bearer-token validation (Quarkus service/resource-server mode). The conductor
   # validates access tokens against the dmp realm's JWKS; it runs no browser login —
-  # oauth2-proxy fronts dmp.${DBZ_DOMAIN} and hands it a bearer. See the SSO runbook.
+  # oauth2-proxy fronts dmp.${DPL_DOMAIN} and hands it a bearer. See the SSO runbook.
   oidc:
     enabled: true
-    authServerUrl: https://auth.{{ requiredEnv "DBZ_DOMAIN" }}/realms/dmp
+    authServerUrl: https://auth.{{ requiredEnv "DPL_DOMAIN" }}/realms/dmp
     clientId: conductor
     apiPolicy: authenticated
     # audience left empty on purpose during the oauth2-proxy bridge phase: the token is
@@ -37,7 +37,7 @@ monitoring:
     collector:
       # Base distro includes the Prometheus exporter (the operator's default
       # otelcol-k8s distro does not). Tag tracks the OTel Operator app version
-      # (OTEL_OPERATOR_VERSION 0.118.0 -> app 0.153.0).
+      # (DPL_OTEL_OPERATOR_VERSION 0.118.0 -> app 0.153.0).
       image: ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector:0.153.0
   prometheus:
     # Conductor queries this Prometheus HTTP API to render its in-UI panels.

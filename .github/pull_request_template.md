@@ -13,7 +13,7 @@
 
 ## How was this tested?
 
-<!-- Commands run, cluster type (kind/k3s), DBZ_ENV, scenario, etc. -->
+<!-- Commands run, cluster type (kind/k3s), DPL_ENV, scenario, etc. -->
 
 ## Checklist
 

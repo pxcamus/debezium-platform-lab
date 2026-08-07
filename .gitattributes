@@ -1,0 +1,25 @@
+# Line endings.
+#
+# Everything in this repository is ultimately executed on Linux — by bash, by helm,
+# or by cloud-init on a freshly provisioned VM — even when it is authored on macOS or
+# Windows. A Windows checkout with core.autocrlf=true (still the default from the Git
+# for Windows installer) rewrites files to CRLF, and the results are confusing rather
+# than obviously wrong:
+#
+#   - bash rejects a CRLF script at its shebang: `bad interpreter: /usr/bin/env bash^M`
+#   - a CRLF .env sets DPL_DOMAIN to "example.com<CR>", which then shows up inside a
+#     rendered Ingress host and fails DNS with no visible typo
+#   - cloud-init silently skips a user-data file it cannot parse
+#
+# `* text=auto` normalises to LF inside the repository; the rules below additionally
+# pin LF on checkout for the files where CRLF actually breaks something.
+
+* text=auto
+
+*.sh         text eol=lf
+justfile     text eol=lf
+*.env        text eol=lf
+.env.example text eol=lf
+*.yaml       text eol=lf
+*.yml        text eol=lf
+*.gotmpl     text eol=lf
