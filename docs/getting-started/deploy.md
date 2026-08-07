@@ -12,6 +12,12 @@ just kind-recreate
 just apply
 ```
 
+![The Debezium Platform stage UI, showing the connection catalog](../assets/stage-connection-catalog.png)
+
+When `just apply` finishes, open <http://dmp.127-0-0-1.sslip.io/> in a browser. That is the stage
+UI — the screenshot above is its connection catalog, listing every source and destination the
+platform can create.
+
 Everything after the clone runs from the repository root — `.env`, the cluster config and the
 helmfile are all resolved relative to it.
 

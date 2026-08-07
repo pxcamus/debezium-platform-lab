@@ -17,8 +17,6 @@
 
 ## Checklist
 
-- [ ] `gofmt -l .` is clean, `go vet ./...` and `go build ./...` pass
-- [ ] `go run github.com/magefile/mage -l` compiles (if magefile/targets changed)
 - [ ] `scripts/validate-helm.sh` passes (if anything under `deploy/` changed)
 - [ ] No real secrets committed (demo values only)
 - [ ] Breaking changes are called out above and documented (README / values)
