@@ -78,7 +78,7 @@ apply *args:
 
 # List the releases this helmfile installs (declarative — does not query the cluster).
 [group('helmfile')]
-releases:
+releases *args:
     #!/usr/bin/env bash
     set -euo pipefail
 
@@ -88,7 +88,7 @@ releases:
     # awk on the table output, not jq on --output json: awk is everywhere, jq is an
     # extra install. The header check means a future helmfile column reshuffle fails
     # loudly instead of silently printing nothing.
-    just hf list | awk -F'\t' '
+    just hf list {{ args }} | awk -F'\t' '
       NR == 1 {
         if ($4 !~ /^INSTALLED/) {
           print "helmfile list columns changed: expected INSTALLED in column 4" > "/dev/stderr"
@@ -98,3 +98,11 @@ releases:
       }
       $4 ~ /^true/ { gsub(/[[:space:]]+$/, "", $1); print $1 }
     '
+
+[group('helmfile')]
+platform-sso *args:
+    just apply --state-values-file {{ justfile_directory() }}/examples/k3s/platform-sso/components.yaml {{ args }}
+
+[group('helmfile')]
+platform-sso-releases:
+    just releases --state-values-file {{ justfile_directory() }}/examples/k3s/platform-sso/components.yaml

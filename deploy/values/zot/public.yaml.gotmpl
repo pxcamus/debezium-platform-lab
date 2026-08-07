@@ -1,4 +1,4 @@
-# Zot OCI registry — homelab (k3s + public wildcard TLS via cert-manager)
+# Zot OCI registry — public (k3s + public wildcard TLS via cert-manager)
 #
 # Wired into deploy/helmfile.yaml.gotmpl as the `zot` release, gated on
 # DPL_ENV=homelab. Applied via:
@@ -8,7 +8,7 @@
 #
 # The ingress host and TLS secret are derived from DPL_DOMAIN (registry.<zone>,
 # wildcard-<zone-with-dashes>-tls). The htpasswd hash is still a placeholder here —
-# supply it (and any arm64 image override) from deploy/values/zot/homelab.secret.yaml,
+# supply it (and any arm64 image override) from deploy/values/zot/public.secret.yaml,
 # a git-ignored overlay (matched by deploy/values/**/*.secret.yaml) layered on top of
 # this file. Generate the hash with:
 #   htpasswd -bBn admin 'your-strong-password'   # -> the $2y$ line for secretFiles.htpasswd
