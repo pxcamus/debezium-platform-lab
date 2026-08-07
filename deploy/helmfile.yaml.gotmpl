@@ -105,6 +105,12 @@ releases:
     chart: project-zot/zot
     version: 0.1.121
     installed: {{ eq (env "DPL_ENV" | default "local") "homelab" }}
+    # The secret overlay carries the real host and the htpasswd hash, so it is
+    # git-ignored (.gitignore: deploy/values/**/*.secret.yaml) and absent from a fresh
+    # checkout. Warn rather than Error so `scripts/validate-helm.sh` can render homelab
+    # in CI — structure is what CI validates, credentials are not. A homelab DEPLOY
+    # still needs the file: without it the chart falls back to an open registry.
+    missingFileHandler: Warn
     labels:
       app: zot
       component: registry
