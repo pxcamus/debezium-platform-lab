@@ -5,7 +5,11 @@ Kafka. This is the point of everything above it.
 
 !!! warning "Placeholder"
 
-    This page is a skeleton.
+    This page is a skeleton — the seeding and scenario runners are being rebuilt. In the
+    meantime the upstream
+    [Debezium Platform documentation](https://debezium.io/documentation/reference/3.6/operations/debezium-platform.html)
+    covers creating connections, sources, destinations and pipelines through the UI, which
+    is what this page will automate.
 
 ## Seed the source database
 
@@ -37,4 +41,3 @@ topic. The platform UI shows the same pipeline and its status.
 ## Where next
 
 - Deploy it somewhere real: [Guides](../guides/index.md)
-- Understand what you just built: [Concepts](../concepts/index.md)

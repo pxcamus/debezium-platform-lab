@@ -1,5 +1,5 @@
 # Top-level entries become tabs (theme feature navigation.tabs). The order is the
-# reader's journey: decide → run it → unstick yourself → go further → look things up.
+# reader's journey: decide → run it → unstick yourself → go further.
 # Titles live here, not in page front matter — the pages stay plain CommonMark so
 # they render identically on GitHub.
 nav:
@@ -7,6 +7,4 @@ nav:
   - Get running: getting-started
   - Troubleshooting: troubleshooting
   - Guides: guides
-  - Reference: reference
-  - Concepts: concepts
   - ...

@@ -53,8 +53,48 @@ cluster-recreate:
 # Run helmfile against deploy/helmfile.yaml.gotmpl with the project env loaded.
 [group('helmfile')]
 hf *args:
-   #!/usr/bin/env bash
-   set -euo pipefail
-   source scripts/lib/env.sh
+    #!/usr/bin/env bash
+    set -euo pipefail
+    source scripts/lib/env.sh
 
-   helmfile --file deploy/helmfile.yaml.gotmpl {{args}}
+    helmfile --file deploy/helmfile.yaml.gotmpl {{ args }}
+
+# Install or upgrade every enabled release. Safe to re-run.
+[group('helmfile')]
+apply *args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    # --skip-diff-on-install is unconditional on purpose. helm-diff renders a release
+    # against the live cluster, so a chart carrying custom resources whose CRDs arrive
+    # in the same run (OpenTelemetryCollector, ServiceMonitor) can never diff on a
+    # fresh cluster — the first apply fails with "ensure CRDs are installed first".
+    #
+    # Nothing is lost by always passing it: the flag only skips the diff for releases
+    # being installed for the FIRST time, where the diff says "all of this is new"
+    # anyway. Releases that already exist still diff normally, which is where a diff
+    # earns its keep. Run `just hf template` when you want to inspect a first install.
+    just hf apply --skip-diff-on-install {{ args }}
+
+# List the releases this helmfile installs (declarative — does not query the cluster).
+[group('helmfile')]
+releases:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    # Reads the `installed:` field out of the rendered state file, so this answers
+    # "what would I get" rather than "what is running".
+    #
+    # awk on the table output, not jq on --output json: awk is everywhere, jq is an
+    # extra install. The header check means a future helmfile column reshuffle fails
+    # loudly instead of silently printing nothing.
+    just hf list | awk -F'\t' '
+      NR == 1 {
+        if ($4 !~ /^INSTALLED/) {
+          print "helmfile list columns changed: expected INSTALLED in column 4" > "/dev/stderr"
+          exit 1
+        }
+        next
+      }
+      $4 ~ /^true/ { gsub(/[[:space:]]+$/, "", $1); print $1 }
+    '
