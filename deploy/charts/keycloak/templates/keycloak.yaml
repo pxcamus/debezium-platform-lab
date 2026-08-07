@@ -1,8 +1,8 @@
 # The operator reconciles this into a StatefulSet + a <name>-service (http:8080).
-# TLS terminates at Traefik (edge): httpEnabled serves plain HTTP in-cluster, and
-# proxy.headers=xforwarded makes Keycloak trust X-Forwarded-* so it builds correct
-# https:// issuer/redirect URLs. ingress.enabled=false — we bring our own Traefik
-# Ingress (ingress.yaml) with the wildcard cert instead of the operator's default.
+# TLS terminates at the ingress controller (edge): httpEnabled serves plain HTTP
+# in-cluster, and proxy.headers=xforwarded makes Keycloak trust X-Forwarded-* so it
+# builds correct https:// issuer/redirect URLs. ingress.enabled=false — we bring our
+# own Ingress (ingress.yaml) with the wildcard cert instead of the operator's default.
 apiVersion: k8s.keycloak.org/v2beta1
 kind: Keycloak
 metadata:

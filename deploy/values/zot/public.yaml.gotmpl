@@ -1,7 +1,7 @@
 # Zot OCI registry — public (k3s + public wildcard TLS via cert-manager)
 #
-# Wired into deploy/helmfile.yaml.gotmpl as the `zot` release, gated on
-# DPL_ENV=homelab. Applied via:
+# Wired into deploy/helmfile.yaml.gotmpl as the `zot` release, selected with
+# components.zot. Applied via:
 #   helmfile --file deploy/helmfile.yaml.gotmpl --selector app=zot apply
 # (or as part of --selector infra=true). Standalone equivalent:
 #   DPL_DOMAIN=<your-zone> helmfile ... --selector app=zot apply
@@ -21,7 +21,7 @@ image:
   pullPolicy: IfNotPresent
 
 service:
-  type: ClusterIP        # Traefik fronts it; no NodePort needed
+  type: ClusterIP        # the ingress controller fronts it; no NodePort needed
   port: 5000
 
 # Persist registry blobs on a PVC backed by k3s local-path

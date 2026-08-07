@@ -1,6 +1,3 @@
-# Option A (one Certificate per namespace): materialize the wildcard TLS secret
-# in the identity namespace so Keycloak's Ingress stands on its own cert instead
-# of implicitly riding on another namespace's copy in Traefik's shared SNI store.
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:

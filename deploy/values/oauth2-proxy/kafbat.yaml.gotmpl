@@ -1,0 +1,56 @@
+# oauth2-proxy — kafbat-ui instance. Rendered by helmfile with the environment loaded.
+# Second instance of the same chart: it owns the kafbat.${DPL_DOMAIN} Ingress and reverse-
+# proxies every path to the kafbat-ui Service in the `kafka` namespace. kafbat-ui itself
+# runs auth.type: disabled, so this release IS its authentication.
+#
+# Deliberately NOT extra upstreams on the main oauth2-proxy release: one instance can serve
+# only one redirect_url, and the dmp host's front door is load-bearing. Separate release =
+# separate cookie, separate callback, no blast radius.
+
+# Same shape as the dmp instance: client-id/secret + cookie-secret come from a hand-created,
+# git-ignored Secret in identity. This instance needs its OWN Keycloak client, because the
+# redirect URI differs:
+#   kubectl -n identity create secret generic oauth2-proxy-kafbat-secret \
+#     --from-literal=client-id=oauth2-proxy-kafbat \
+#     --from-literal=client-secret='<keycloak oauth2-proxy-kafbat client secret>' \
+#     --from-literal=cookie-secret="$(openssl rand -base64 24)"
+# cookie-secret must be a 16/24/32-BYTE string (used verbatim): `-base64 24` = 32 chars.
+config:
+  existingSecret: oauth2-proxy-kafbat-secret
+  configFile: |-
+    provider = "oidc"
+    oidc_issuer_url = "https://auth.{{ requiredEnv "DPL_DOMAIN" }}/realms/dmp"
+    redirect_url = "https://kafbat.{{ requiredEnv "DPL_DOMAIN" }}/oauth2/callback"
+    email_domains = ["*"]
+    # Realm users are test accounts with unverified emails; don't reject them on the
+    # email_verified claim. Drop this once users arrive from a real IdP.
+    insecure_oidc_allow_unverified_email = true
+    # Cookie is scoped to this host, not the whole domain: a kafbat session should not
+    # double as a dmp session. This is the main reason the two proxies stay separate.
+    cookie_domains = ["kafbat.{{ requiredEnv "DPL_DOMAIN" }}"]
+    cookie_secure = true
+    whitelist_domains = ["kafbat.{{ requiredEnv "DPL_DOMAIN" }}"]
+    reverse_proxy = true
+    skip_provider_button = true
+    # kafbat-ui does not validate a bearer itself (auth.type: disabled), so unlike the
+    # conductor upstream there is no pass_authorization_header here — the proxy is the
+    # only thing enforcing identity.
+    # Service name is <release>-<chart> = kafbat-ui-kafka-ui, port 80 (confirmed with
+    # `helm template kafbat-ui kafbat-ui/kafka-ui -s templates/service.yaml`).
+    upstreams = [
+      "http://kafbat-ui-kafka-ui.kafka.svc.cluster.local:80/"
+    ]
+
+# The kafbat host's single front door. Lives in identity, reusing the wildcard cert the
+# keycloak release materialized there.
+ingress:
+  enabled: true
+  className: traefik
+  path: /
+  pathType: Prefix
+  hosts:
+    - kafbat.{{ requiredEnv "DPL_DOMAIN" }}
+  tls:
+    - secretName: wildcard-{{ requiredEnv "DPL_DOMAIN" | replace "." "-" }}-tls
+      hosts:
+        - kafbat.{{ requiredEnv "DPL_DOMAIN" }}

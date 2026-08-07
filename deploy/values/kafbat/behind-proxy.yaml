@@ -1,0 +1,8 @@
+# Layered over values.yaml.gotmpl only when components.sso AND components.kafka-ui are
+# both on (see the kafbat-ui release in helmfile.yaml.gotmpl).
+#
+# kafbat-ui has auth.type: disabled, so its own Ingress is an unauthenticated front door.
+# The oauth2-proxy-kafbat release publishes the kafbat host instead and reverse-proxies to
+# this Service, which stays ClusterIP-only.
+ingress:
+  enabled: false

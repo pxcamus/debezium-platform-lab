@@ -4,7 +4,7 @@
 # dance that ForwardAuth would otherwise need just to redirect on 401. After login it proxies
 # /api -> conductor (injecting Authorization: Bearer so the conductor resource server validates
 # it) and everything else -> stage. The chart's own conductor-ingress is disabled (see
-# values/dmp/homelab.yaml.gotmpl) so this is the single front door. Temporary bridge until stage
+# values/dmp/public.yaml.gotmpl) so this is the single front door. Temporary bridge until stage
 # speaks OIDC natively — see the SSO runbook.
 
 # client-id/secret + cookie-secret come from a hand-created, git-ignored Secret in identity:
@@ -24,7 +24,7 @@ config:
     oidc_issuer_url = "https://auth.{{ requiredEnv "DPL_DOMAIN" }}/realms/dmp"
     redirect_url = "https://dmp.{{ requiredEnv "DPL_DOMAIN" }}/oauth2/callback"
     email_domains = ["*"]
-    # Homelab realm users (thorin, …) are test accounts with unverified emails; don't reject
+    # Starter realm users (thorin, …) are test accounts with unverified emails; don't reject
     # them on the email_verified claim. Drop this once users have verified emails / real IdP.
     insecure_oidc_allow_unverified_email = true
     cookie_domains = [".{{ requiredEnv "DPL_DOMAIN" }}"]

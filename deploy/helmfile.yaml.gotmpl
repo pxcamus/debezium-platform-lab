@@ -6,6 +6,9 @@
        Note --file is NOT repeatable (last one wins, silently), which is why component
        selection rides on state values rather than a second helmfile. */ -}}
 {{- $v := .Values | default dict }}
+{{- $env    := env "DPL_ENV" | default "local" }}
+{{- $local  := eq $env "local" }}
+{{- $public := eq $env "public" }}
 {{- $operatorMode    := env "DPL_OPERATOR_MODE" | default "bundled" }}
 {{- $bundledOperator := eq $operatorMode "bundled" }}
 {{- $postgres     := dig "components" "postgres"      false $v }}
@@ -19,10 +22,9 @@
 {{- $apicurio     := dig "components" "apicurio"      false $v }}
 {{- $sso          := dig "components" "sso"           false $v }}
 {{- $zot          := dig "components" "zot"           false $v }}
-{{- if and $sso (ne (env "DPL_ENV" | default "local") "public") }}
-    {{- fail "components.sso requires DPL_ENV=public (cert-manager + ClusterIssuer)" }}
+{{- if and $sso (not $public) }}
+  {{- fail "components.sso requires DPL_ENV=public — the identity chain needs cert-manager and the ClusterIssuer, which only the public profile installs" }}
 {{- end }}
-
 
 helmDefaults:
   wait: true
@@ -68,7 +70,10 @@ releases:
     namespace: ingress-nginx
     createNamespace: true
     chart: ingress-nginx/ingress-nginx
-    installed: {{ eq (env "DPL_ENV" | default "local") "local" }}
+    # local only. The public profile runs on k3s, which ships Traefik as its bundled
+    # ingress controller — so public Ingresses carry `ingressClassName: traefik` and
+    # no controller is installed here. Kind ships nothing, hence nginx.
+    installed: {{ $local }}
     labels:
       app: ingress-nginx
       component: ingress
@@ -81,30 +86,30 @@ releases:
     namespace: cert-manager
     createNamespace: true
     chart: jetstack/cert-manager
-    installed: {{ eq (env "DPL_ENV" | default "local") "public" }}
+    installed: {{ $public }}
     labels:
       app: cert-manager
       component: cert-manager
       infra: "true"
     values:
-      - values/cert-manager/{{ env "DPL_ENV" | default "local" }}.yaml
+      - values/cert-manager/{{ $env }}.yaml
 
   - name: cert-manager-webhook-gandi
     namespace: cert-manager
     createNamespace: true
     chart: cert-manager-webhook-gandi/cert-manager-webhook-gandi
-    installed: {{ eq (env "DPL_ENV" | default "local") "public" }}
+    installed: {{ $public }}
     labels:
       app: cert-manager-webhook-gandi
       component: cert-manager-webhook-gandi
       infra: "true"
     values:
-      - values/cert-manager-webhook-gandi/{{ env "DPL_ENV" | default "homelab" }}.yaml
+      - values/cert-manager-webhook-gandi/{{ $env }}.yaml
 
-  # OCI registry (zot), homelab only. Fronted by Traefik with the wildcard TLS
+  # OCI registry (zot). Fronted by the ingress controller with the wildcard TLS
   # secret that already lives in the `registry` namespace. The real host + cert
-  # secret name + htpasswd hash come from values/zot/homelab.secret.yaml, which is
-  # git-ignored (see .gitignore) and only referenced when DPL_ENV=homelab.
+  # secret name + htpasswd hash come from values/zot/public.secret.yaml, which is
+  # git-ignored (see .gitignore) and only referenced on the public profile.
   - name: zot
     namespace: registry
     createNamespace: true
@@ -113,8 +118,8 @@ releases:
     installed: {{ $zot }}
     # The secret overlay carries the real host and the htpasswd hash, so it is
     # git-ignored (.gitignore: deploy/values/**/*.secret.yaml) and absent from a fresh
-    # checkout. Warn rather than Error so `scripts/validate-helm.sh` can render homelab
-    # in CI — structure is what CI validates, credentials are not. A homelab DEPLOY
+    # checkout. Warn rather than Error so `scripts/validate-helm.sh` can render public
+    # in CI — structure is what CI validates, credentials are not. A real DEPLOY
     # still needs the file: without it the chart falls back to an open registry.
     missingFileHandler: Warn
     labels:
@@ -122,9 +127,9 @@ releases:
       component: registry
       infra: "true"
     values:
-      - values/zot/homelab.yaml.gotmpl
-{{- if eq (env "DPL_ENV" | default "local") "homelab" }}
-      - values/zot/homelab.secret.yaml
+      - values/zot/{{ $env }}.yaml.gotmpl
+{{- if $public }}
+      - values/zot/public.secret.yaml
 {{- end }}
 
   - name: strimzi-cluster-operator
@@ -174,6 +179,12 @@ releases:
       infra: "true"
     values:
       - values/kafbat/values.yaml.gotmpl
+{{- if and $sso $kafkaUI }}
+      # With SSO on, the oauth2-proxy-kafbat release owns the kafbat host's Ingress and
+      # reverse-proxies to this Service. Leaving the chart's own Ingress enabled would
+      # publish a second, unauthenticated route to the same backend.
+      - values/kafbat/behind-proxy.yaml
+{{- end }}
     needs:
       - kafka/kafka-cluster
 
@@ -233,7 +244,7 @@ releases:
       component: mssql
       infra: "false"
     values:
-      - values/mssql/{{ env "DPL_ENV" | default "local" }}.yaml
+      - values/mssql/{{ $env }}.yaml
 
   - name: http-server
     namespace: tools
@@ -245,21 +256,7 @@ releases:
       component: mock-server
       infra: "true"
     values:
-      - values/http-server/{{ env "DPL_ENV" | default "local" }}.yaml
-
-  - name: cdc-dashboard
-    namespace: tools
-    createNamespace: true
-    chart: ./charts/cdc-dashboard
-    installed: {{ $cdcDashboard }}
-    labels:
-      app: cdc-dashboard
-      component: cdc-dashboard
-      infra: "false"
-    values:
-      - values/cdc-dashboard/{{ env "DPL_ENV" | default "local" }}.yaml
-    needs:
-      - databases/mongodb-replica-set
+      - values/http-server/{{ $env }}.yaml
 
   - name: apicurio-registry
     namespace: apicurio
@@ -271,13 +268,13 @@ releases:
       component: schema-registry
       infra: "false"
     values:
-      - values/apicurio/{{ env "DPL_ENV" | default "local" }}.yaml.gotmpl
+      - values/apicurio/{{ $env }}.yaml.gotmpl
     needs:
       - databases/postgresql-cluster
 
-  # Monitoring foundation (homelab + aws). Both are labelled infra:true so the
-  # `--selector infra=true` batch in `mage helm:all` installs them (and their
-  # ServiceMonitor / OpenTelemetryCollector CRDs) BEFORE debezium-platform.
+  # Monitoring foundation, installed on every profile. Both are labelled infra:true
+  # so the `--selector infra=true` batch installs them (and their ServiceMonitor /
+  # OpenTelemetryCollector CRDs) BEFORE debezium-platform.
   #
   # kube-prometheus-stack ships very large CRDs; the repo-wide helmDefaults
   # (wait+atomic, timeout 120) can time out or hit the client-side
@@ -296,23 +293,24 @@ releases:
       component: monitoring
       infra: "true"
     values:
-      - values/kube-prometheus-stack/{{ env "DPL_ENV" | default "local" }}.yaml.gotmpl
-{{- if eq (env "DPL_ENV" | default "local") "local" }}
+      - values/kube-prometheus-stack/{{ $env }}.yaml.gotmpl
+{{- if $local }}
     # Grafana's Ingress must not be created while nginx's admission webhook is
     # registered but its controller is still starting — the API server calls the
     # webhook, gets connection refused, and atomic rolls the whole stack back.
     # helmDefaults.wait makes this edge sufficient: nginx is Ready, not merely applied.
-    # Conditional because ingress-nginx only installs on local (homelab fronts with
-    # Traefik), and an edge to a disabled release is not reliably a no-op.
+    # Guarded by the same condition as the ingress-nginx release itself: an edge to a
+    # disabled release is not reliably a no-op. public fronts with k3s's Traefik,
+    # which has no admission webhook and is already running before helmfile starts.
     needs:
       - ingress-nginx/ingress-nginx
 {{- end }}
 
   # OpenTelemetry Operator — reconciles the OpenTelemetryCollector CR that the
-  # debezium-platform chart creates when monitoring.otel.enabled=true. In homelab
-  # cert-manager is present, so the operator's admission-webhook certs work with
-  # no extra config. Everywhere else there is no cert-manager and the chart would emit a
-  # cert-manager Issuer + Certificate the cluster cannot resolve, so
+  # debezium-platform chart creates when monitoring.otel.enabled=true. On the public
+  # profile cert-manager is present, so the operator's admission-webhook certs work
+  # with no extra config. Everywhere else there is no cert-manager and the chart would
+  # emit a cert-manager Issuer + Certificate the cluster cannot resolve, so
   # values/opentelemetry-operator/self-signed.yaml switches the webhook to a
   # self-signed auto-generated cert instead.
   - name: opentelemetry-operator
@@ -325,20 +323,21 @@ releases:
       app: opentelemetry-operator
       component: monitoring
       infra: "true"
-{{- if ne (env "DPL_ENV" | default "local") "homelab" }}
+{{- if not $public }}
     values:
       - values/opentelemetry-operator/self-signed.yaml
 {{- end }}
 
-  # Identity / SSO (homelab only) — Keycloak via the official Operator, treated
-  # as durable infra (installed once, upgraded in place; not part of the platform
-  # churn). Three releases in the `identity` namespace, chained by needs:
+  # Identity / SSO — selected with components.sso, which the guard at the top of this
+  # file pins to DPL_ENV=public. Keycloak via the official Operator, treated as durable
+  # infra (installed once, upgraded in place; not part of the platform churn).
+  # Three releases in the `identity` namespace, chained by needs:
   #   keycloak-operator  -> official operator + CRDs, vendored by
   #                         scripts/vendor-keycloak-operator.sh (pinned version).
   #   keycloak-db        -> a DEDICATED CNPG Postgres, separate from the demo
   #                         `databases` cluster so a platform rebuild never wipes
   #                         Keycloak's identity data. Needs cnpg-operator.
-  #   keycloak           -> the Keycloak CR + Traefik Ingress (edge TLS from the
+  #   keycloak           -> the Keycloak CR + nginx Ingress (edge TLS from the
   #                         wildcard cert) + identity-namespace Certificate + a
   #                         starter dmp realm. Needs the operator (CRDs) and DB.
   # First install: the operator CRDs are large; if Helm hits the client-side
@@ -385,14 +384,15 @@ releases:
       component: identity
       infra: "true"
     values:
-      - values/keycloak/homelab.yaml.gotmpl
+      - values/keycloak/{{ $env }}.yaml.gotmpl
     needs:
       - identity/keycloak-operator
       - identity/keycloak-db
 
-  # SSO Phase 3 — oauth2-proxy fronts dmp.${DPL_DOMAIN} (stage UI + conductor /api) with a
-  # Keycloak login via Traefik ForwardAuth, handing the conductor a bearer it validates as
-  # an OIDC resource server. Temporary bridge until stage speaks OIDC natively.
+  # SSO Phase 3 — oauth2-proxy fronts dmp.${DPL_DOMAIN} (stage UI + conductor /api) as a
+  # full REVERSE PROXY, not ForwardAuth: it owns the host's Ingress and proxies to the two
+  # upstreams itself, handing the conductor a bearer it validates as an OIDC resource
+  # server. Temporary bridge until stage speaks OIDC natively.
   # needs keycloak: oauth2-proxy fetches the realm's OIDC discovery at startup and won't go
   # Ready until it resolves. atomic:false so a transient discovery/cert lag doesn't uninstall
   # an otherwise-healthy proxy (same reasoning as the keycloak stanza).
@@ -409,7 +409,31 @@ releases:
       component: identity
       infra: "true"
     values:
-      - values/oauth2-proxy/homelab.yaml.gotmpl
+      - values/oauth2-proxy/{{ $env }}.yaml.gotmpl
+    needs:
+      - identity/keycloak
+
+  # Second oauth2-proxy instance, fronting kafbat-ui exactly as the first fronts the dmp
+  # host. A separate release rather than extra upstreams on the first: each instance owns
+  # one Ingress host, one cookie and one redirect_url, so protecting another UI can never
+  # disturb the working dmp front door. kafbat-ui itself has auth.type: disabled — this
+  # release IS its authentication, which is why the two are gated together.
+  - name: oauth2-proxy-kafbat
+    namespace: identity
+    createNamespace: true
+    chart: oauth2-proxy/oauth2-proxy
+    version: '{{ requiredEnv "DPL_OAUTH2_PROXY_CHART_VERSION" }}'
+    installed: {{ and $sso $kafkaUI }}
+    timeout: 300
+    atomic: false
+    labels:
+      app: oauth2-proxy-kafbat
+      component: identity
+      infra: "true"
+    values:
+      - values/oauth2-proxy/kafbat.yaml.gotmpl
+    # keycloak only: the proxy resolves OIDC discovery at startup, but reaches its
+    # upstream per-request, so it does not need kafbat-ui to be Ready first.
     needs:
       - identity/keycloak
 
@@ -424,7 +448,7 @@ releases:
       component: operator
     # The operator image is pinned independently of the chart version (DPL_DEBEZIUM_VERSION).
     # The platform (conductor/stage) only publishes arm64 on `nightly`, so on the
-    # erebor arm64 homelab we must run nightly conductor/stage — and the operator +
+    # arm64 lab box we must run nightly conductor/stage — and the operator +
     # its DebeziumServer CRD must match that nightly line, or the operator fails to
     # deserialize the CRs the nightly conductor emits (e.g. runtime.metrics.otel
     # metricExportIntervalMs, added after 3.6.0). Vendor the matching nightly CRD via
@@ -438,7 +462,7 @@ releases:
     createNamespace: true
     # Vendored from the debezium-platform repo's helm/ (branch build) rather than the
     # published debezium/debezium-platform chart, because it carries the conductor.oidc
-    # block the homelab SSO demo needs (not yet in the released chart). Re-sync from
+    # block the SSO demo needs (not yet in the released chart). Re-sync from
     # ../debezium-platform/helm when that lands upstream, then switch back to the repo
     # chart + DPL_DEBEZIUM_VERSION. Local path ⇒ no version pin (Chart.yaml is 0.0.1).
     chart: ./charts/debezium-platform

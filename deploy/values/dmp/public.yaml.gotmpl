@@ -12,7 +12,7 @@ database:
 ingress:
   # Disabled — oauth2-proxy owns the dmp.${DPL_DOMAIN} ingress. It reverse-proxies to the
   # stage + conductor Services and runs the Keycloak login in front, so a separate chart
-  # ingress here would just collide on the same host. See values/oauth2-proxy/homelab.yaml.gotmpl.
+  # ingress here would just collide on the same host. See values/oauth2-proxy/public.yaml.gotmpl.
   enabled: false
 debezium-operator:
   enabled: false

@@ -137,11 +137,13 @@ assert_single_operator standalone
 
 # --- Per-environment rendering ----------------------------------------------
 
+# Profiles, not venues: `local` is Kind with no TLS, `public` is a real cluster with a
+# real domain and cert-manager. `aws` and `hetzner` dropped out when their values files
+# were removed in the values consolidation — re-add them here the moment
+# deploy/values/dmp/<env>.yaml.gotmpl comes back, or the check below stops covering them.
 helmfile_envs=(
   local
-  homelab
-  aws
-  hetzner
+  public
 )
 
 template_helmfile_env() {

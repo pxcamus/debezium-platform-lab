@@ -1,9 +1,16 @@
-# Defaults are overridden per-env by deploy/values/keycloak/homelab.yaml.gotmpl,
-# which injects the real DBZ_DOMAIN. The public host is auth.<domain>; the TLS
+# Defaults are overridden per-profile by deploy/values/keycloak/<DPL_ENV>.yaml.gotmpl,
+# which injects the real DPL_DOMAIN. The public host is auth.<domain>; the TLS
 # secret and wildcard Certificate are derived as wildcard-<domain-dashed>-tls.
 domain: platform.debezium.local
 
 instances: 1
+
+ingress:
+  # Which controller publishes auth.<domain>. Defaults to traefik because this chart
+  # only installs on the public profile, which runs k3s with its bundled Traefik.
+  # A value rather than a hardcoded class so a cluster fronting with something else
+  # can override it without patching the template.
+  className: traefik
 
 # Dedicated CNPG cluster (keycloak-db release). CNPG exposes the primary at
 # <cluster>-rw.<namespace>.svc.cluster.local.
