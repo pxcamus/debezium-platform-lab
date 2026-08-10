@@ -1,0 +1,26 @@
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: {{ .Values.issuerName }}
+  labels:
+    app.kubernetes.io/name: dns01-gandi
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  acme:
+    server: {{ .Values.acme.server }}
+    email: {{ required "dns01-gandi: .Values.email is required — set DPL_ACME_EMAIL" .Values.email }}
+    privateKeySecretRef:
+      name: {{ .Values.acme.privateKeySecretName }}
+    solvers:
+      # No `selector`, so this solver answers every challenge the issuer is asked
+      # for. Add one (dnsZones/dnsNames) if a second zone ever needs a different
+      # provider — that is the seam, and it needs no change to any Certificate.
+      - dns01:
+          webhook:
+            groupName: {{ .Values.solver.groupName }}
+            solverName: {{ .Values.solver.solverName }}
+            config:
+              patSecretRef:
+                name: {{ .Values.solver.patSecretName }}
+                key: {{ .Values.solver.patSecretKey }}

@@ -22,8 +22,12 @@
 {{- $apicurio     := dig "components" "apicurio"      false $v }}
 {{- $sso          := dig "components" "sso"           false $v }}
 {{- $zot          := dig "components" "zot"           false $v }}
+{{- $dns01Gandi   := dig "components" "dns01-gandi"   false $v }}
 {{- if and $sso (not $public) }}
-  {{- fail "components.sso requires DPL_ENV=public — the identity chain needs cert-manager and the ClusterIssuer, which only the public profile installs" }}
+  {{- fail "components.sso requires DPL_ENV=public — the identity chain needs cert-manager and a ClusterIssuer, and only the public profile installs cert-manager" }}
+{{- end }}
+{{- if and $dns01Gandi (not $public) }}
+  {{- fail "components.dns01-gandi requires DPL_ENV=public — the webhook and ClusterIssuer are useless without the cert-manager the public profile installs" }}
 {{- end }}
 
 helmDefaults:
@@ -94,17 +98,47 @@ releases:
     values:
       - values/cert-manager/{{ $env }}.yaml
 
+  # DNS-01 for Gandi-hosted zones. On the components axis, not the profile axis:
+  # cert-manager is agnostic, but a solver is registrar-specific and cert-manager
+  # only ships built-ins for a handful of providers (Route53, CloudDNS, Cloudflare,
+  # …) — Gandi is not one, hence an out-of-tree webhook. Readers whose DNS lives
+  # elsewhere leave this off and bring their own `letsencrypt-prod` ClusterIssuer;
+  # nothing else in the repo changes, because every Certificate references the
+  # issuer by name only.
   - name: cert-manager-webhook-gandi
     namespace: cert-manager
     createNamespace: true
     chart: cert-manager-webhook-gandi/cert-manager-webhook-gandi
-    installed: {{ $public }}
+    installed: {{ $dns01Gandi }}
     labels:
       app: cert-manager-webhook-gandi
       component: cert-manager-webhook-gandi
       infra: "true"
     values:
-      - values/cert-manager-webhook-gandi/{{ $env }}.yaml
+      - values/cert-manager-webhook-gandi/{{ $env }}.yaml.gotmpl
+    needs:
+      - cert-manager/cert-manager
+
+  # The other half of the same flag: the ClusterIssuer that dispatches to the
+  # webhook above. Split into its own release only because the webhook comes from
+  # an upstream chart that does not create one.
+  - name: dns01-gandi
+    namespace: cert-manager
+    createNamespace: true
+    chart: ./charts/dns01-gandi
+    installed: {{ $dns01Gandi }}
+    labels:
+      app: dns01-gandi
+      component: cert-manager-webhook-gandi
+      infra: "true"
+    values:
+      - values/dns01-gandi/{{ $env }}.yaml.gotmpl
+    needs:
+      # cert-manager for the ClusterIssuer CRD; the webhook because the issuer
+      # registers its ACME account eagerly and the solver should exist by the time
+      # the first Certificate is created.
+      - cert-manager/cert-manager
+      - cert-manager/cert-manager-webhook-gandi
 
   # OCI registry (zot). Fronted by the ingress controller with the wildcard TLS
   # secret that already lives in the `registry` namespace. The real host + cert
