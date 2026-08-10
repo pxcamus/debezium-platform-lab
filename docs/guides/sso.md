@@ -1,12 +1,224 @@
 # Single sign-on
 
-Putting an identity provider and a forward-auth proxy in front of the platform, so it is
-not reachable by anyone who can route to the ingress.
+Putting Keycloak in front of the platform, so the stage UI and kafbat-ui share one login
+instead of shipping an unauthenticated console on a public address.
 
-!!! warning "Placeholder"
+This is a component, not a profile: switch it on with `components.sso` and the identity
+chain arrives. It does require `DPL_ENV=public`, because the whole thing rests on real
+certificates — [Deploy to k3s](k3s.md) covers getting there.
 
-    This page is a skeleton. Single sign-on is optional and off by default.
+## What it installs
 
-Topics to cover: what the default deployment does and does not protect, the identity
-provider deployment, protecting the platform hostname, and the trade-offs of doing this in
-a lab versus in front of anything real.
+Six releases, all but one in the `identity` namespace:
+
+| Release | What it is |
+|---|---|
+| `cnpg-operator` | CloudNativePG. Shared with the demo databases — installed by `components.postgres` *or* `components.sso` |
+| `keycloak-operator` | The Keycloak operator and its CRDs, vendored under `deploy/charts/keycloak-operator/` |
+| `keycloak-db` | A **dedicated** CNPG Postgres, deliberately separate from the demo `databases` cluster so rebuilding the platform never wipes identity data |
+| `keycloak` | The `Keycloak` CR, the `auth.<domain>` Ingress, the wildcard `Certificate`, and a starter `dmp` realm |
+| `oauth2-proxy` | Front door for `dmp.<domain>` — the stage UI and the conductor API |
+| `oauth2-proxy-kafbat` | Front door for `kafbat.<domain>`. Only when `components.kafka-ui` is also on |
+
+```yaml
+# examples/k3s/platform-sso/components.yaml
+components:
+  kafka: true
+  kafka-ui: true
+  sso: true
+  dns01-gandi: true
+```
+
+```shell
+just platform-sso            # apply with that file
+just platform-sso-releases   # list what it would install, without a cluster
+```
+
+Setting `components.sso` on any profile other than `public` fails the render outright,
+rather than installing half an identity chain that can never get a certificate.
+
+## The shape of it
+
+Both proxies run as **reverse proxies**, not as ForwardAuth. Each owns its host's Ingress
+and proxies to the upstreams itself:
+
+```
+browser ── https://dmp.<domain> ──▶ oauth2-proxy ──┬─▶ conductor:8080  (/api/)
+                  │                                └─▶ stage:3000     (everything else)
+                  └── 302 when unauthenticated ──▶ https://auth.<domain>/realms/dmp
+```
+
+That choice is worth understanding, because it explains most of the configuration:
+
+- **Unauthenticated requests get an automatic 302.** With ForwardAuth, Traefik returns the
+  proxy's 401 as-is; turning that into a redirect needs an errors-middleware pointing across
+  namespaces. Owning the Ingress skips all of it.
+- **The conductor gets a real bearer token.** `pass_authorization_header` injects
+  `Authorization: Bearer <id_token>` into the *upstream* request, and the conductor runs in
+  Quarkus OIDC resource-server mode (`apiPolicy: authenticated`) validating it against the
+  realm's JWKS. Note it is `pass_`, not `set_authorization_header` — the latter only sets the
+  header on the auth *response*, which is meaningful in forward-auth mode and useless here.
+- **The dmp chart's own Ingress is disabled.** `deploy/values/dmp/public.yaml.gotmpl` sets
+  `ingress.enabled: false`; a second Ingress on the same host would just collide.
+
+Two proxy instances rather than one release with extra upstreams, because an oauth2-proxy
+instance serves exactly one `redirect_url` and one cookie. Separate releases mean separate
+callbacks and separate cookies — a kafbat session does not silently become a dmp session,
+and protecting another UI cannot disturb the working dmp front door.
+
+!!! note "kafbat-ui has no authentication of its own"
+
+    It runs `auth.type: disabled`, so `oauth2-proxy-kafbat` *is* its authentication. That
+    is why the two are gated together: `installed: {{ and $sso $kafkaUI }}`. Enabling
+    `kafka-ui` without `sso` publishes an unauthenticated Kafka console.
+
+## Certificates
+
+The `keycloak` release materialises one wildcard `Certificate` for `*.<domain>` in the
+`identity` namespace, and both proxies mount the Secret it produces. Since Secrets do not
+cross namespaces, everything that needs this certificate has to live in `identity` — which
+is exactly why the proxies do, and why Grafana (in `monitoring`) is not published.
+
+The release sets `atomic: false` on purpose. Helm's `--wait` blocks on the `Certificate`,
+and a DNS-01 challenge can outlast the timeout; the default rollback-on-failure would then
+*uninstall* a perfectly healthy Keycloak — CR Ready, realm imported — because a certificate
+was slow. Leaving the resources in place lets issuance catch up.
+
+## Deploy
+
+Expect two passes. The proxies need Keycloak clients that do not exist until Keycloak is
+running, so the first apply brings up the identity chain and the proxies fail on a missing
+Secret.
+
+**1. Apply.**
+
+```shell
+just platform-sso
+```
+
+Keycloak comes up at `https://auth.<domain>`. The admin password is generated by the
+operator:
+
+```shell
+kubectl -n identity get secret keycloak-initial-admin \
+  -o jsonpath='{.data.password}' | base64 -d
+```
+
+**2. Create one Keycloak client per proxy** in the `dmp` realm — client authentication on
+(confidential), standard flow enabled — with these valid redirect URIs:
+
+| Client ID | Redirect URI |
+|---|---|
+| `oauth2-proxy` | `https://dmp.<domain>/oauth2/callback` |
+| `oauth2-proxy-kafbat` | `https://kafbat.<domain>/oauth2/callback` |
+
+The conductor also expects a client named `conductor`, referenced by
+`deploy/values/dmp/public.yaml.gotmpl`. It validates tokens rather than issuing them, so it
+needs no redirect URI.
+
+**3. Create the two Secrets** from those clients' credentials:
+
+```shell
+kubectl -n identity create secret generic oauth2-proxy-secret \
+  --from-literal=client-id=oauth2-proxy \
+  --from-literal=client-secret='<from Keycloak>' \
+  --from-literal=cookie-secret="$(openssl rand -base64 24)"
+
+kubectl -n identity create secret generic oauth2-proxy-kafbat-secret \
+  --from-literal=client-id=oauth2-proxy-kafbat \
+  --from-literal=client-secret='<from Keycloak>' \
+  --from-literal=cookie-secret="$(openssl rand -base64 24)"
+```
+
+!!! warning "`openssl rand -base64 24`, not `-base64 32`"
+
+    The cookie secret is used verbatim and must be 16, 24 or 32 **bytes**. `-base64 24`
+    produces 32 characters and works; `-base64 32` produces 44 and the proxy refuses to
+    start. The error names the length, not the flag that caused it.
+
+**4. Apply again.** The proxies pick up the Secret and go Ready.
+
+??? tip "Collapsing this to a single pass"
+
+    The starter realm is a full Keycloak `RealmRepresentation`
+    (`deploy/charts/keycloak/templates/realmimport.yaml`), currently holding only a name.
+    Declare the three clients there — including a fixed `secret` for each — and the
+    credentials are known before the first apply, so the Secrets can be created up front
+    and the second pass disappears.
+
+    Be aware the operator runs the import as a **one-shot Job on create**. It does not
+    reconcile later console edits, and it does not re-import on upgrade. The workflow is:
+    define here → apply → experiment in the console → export → commit.
+
+## Brokering Entra ID
+
+Keycloak fronts the platform; Entra ID (or any other IdP) sits behind Keycloak as a
+*federated* identity provider. Users click through to their corporate login, and the
+platform only ever sees a Keycloak token — nothing downstream changes.
+
+In Entra, register an application with this redirect URI:
+
+```
+https://auth.<domain>/realms/dmp/broker/<alias>/endpoint
+```
+
+where `<alias>` is whatever you name the provider in Keycloak. Then in the `dmp` realm,
+**Identity providers → OpenID Connect v1.0**, using discovery against:
+
+```
+https://login.microsoftonline.com/<tenant-id>/v2.0/.well-known/openid-configuration
+```
+
+with the application's client ID and a client secret from **Certificates & secrets**.
+
+!!! note "Entra requires HTTPS redirect URIs"
+
+    Only `localhost` is exempt. This is a hard constraint on the whole design: there is no
+    plain-HTTP or `sslip.io` shortcut for the SSO path, which is why `components.sso` is
+    gated to the profile that issues real certificates.
+
+This part is console work today — the repository does not template the identity provider.
+Once it is configured, export the realm and commit it into `realmImport` to make it
+reproducible.
+
+## Known rough edges
+
+These are deliberate, and each is marked in the values file that carries it.
+
+- **`insecure_oidc_allow_unverified_email = true`** on both proxies. Starter-realm accounts
+  are test users with no verified email address, and the claim check would reject them. Drop
+  it once users arrive from a real IdP.
+- **No audience enforcement on the conductor.** `oidc.audience` is left empty because the
+  token is issued for the `oauth2-proxy` client — enforcing `aud` would 401 every request.
+  Setting it needs a Keycloak audience mapper, and properly belongs with making stage a
+  native OIDC client rather than something behind a bridge.
+- **The `keycloak-db` password is a lab placeholder.** Override it in a git-ignored
+  `deploy/values/keycloak-db/public.secret.yaml`; the pattern `deploy/values/**/*.secret.yaml`
+  is already ignored.
+- **oauth2-proxy is a bridge.** The end state is stage speaking OIDC natively, at which
+  point the proxy in front of the dmp host stops being necessary.
+
+## When it does not work
+
+**`metadata.annotations: Too long` on first install.** The Keycloak operator CRDs exceed
+the client-side apply limit. Apply them once, server-side, then re-run:
+
+```shell
+kubectl apply --server-side -f deploy/charts/keycloak-operator/crds/
+```
+
+**A proxy pod stuck in `CreateContainerConfigError`.** Its Secret does not exist yet — step
+3 above.
+
+**A redirect loop, or `invalid_grant` after login.** The `redirect_url` in the values file
+and the client's valid redirect URI in Keycloak have to match exactly, including scheme and
+the `/oauth2/callback` path.
+
+**The stage UI loads but its API calls fail.** Check that `domain.scheme` is `https` in
+`deploy/values/dmp/public.yaml.gotmpl`. TLS terminates at the proxy, so the scheme cannot be
+inferred from the chart's own Ingress — if it falls back to `http`, the SPA calls the API
+over plain HTTP and the browser blocks it as mixed content.
+
+**`/api/pipelines` returns the stage UI instead of JSON.** The conductor upstream is
+`.../api/` with a trailing slash, which makes it a subtree match. Without the slash it is an
+exact match on `/api` and every deeper path falls through to the stage upstream.

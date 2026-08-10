@@ -69,11 +69,12 @@ default is wrong when you run from your own machine.
     | `DPL_DMP_RESOURCE_PREFIX` / `DPL_DMP_ENVIRONMENT` | Prefix for deterministic DMP resource names | — |
     | `DPL_DMP_KAFKA_BOOTSTRAP_SERVERS` | Kafka bootstrap for DMP payloads | — |
 
-    Known `DPL_ENV` values: `local`, `homelab` (self-hosted k3s + public TLS), `aws`,
-    `hetzner`. Each has a matching values file under `deploy/values/<component>/`.
+    Known `DPL_ENV` values: `local` and `public` (self-hosted k3s, real DNS, cert-manager
+    TLS). Each has a matching values file under `deploy/values/<component>/`.
 
-    `k3s` support for `DPL_CLUSTER_TYPE` is not migrated yet — `just cluster-recreate`
-    reports this rather than doing something surprising.
+    `just cluster-recreate` handles `kind` only and refuses `DPL_CLUSTER_TYPE=k3s` rather
+    than doing something surprising — see [Deploy to k3s](../guides/k3s.md) for creating
+    that cluster.
 
     DMP JSON payloads use `${ENV_VAR}` syntax, expanded from the environment when the
     payload is loaded.
