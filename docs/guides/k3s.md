@@ -99,8 +99,40 @@ Keep Traefik either way.
 ## Point kubectl at it
 
 k3s writes a kubeconfig on the node whose server address is `127.0.0.1`, so it has to be
-rewritten in flight. Piping through `sed` avoids both the `sed -i` incompatibility between
-macOS and Linux and any need to loosen the file mode on the node:
+rewritten in flight. Fill in the `DPL_K3S_*` variables in `.env` and one recipe does it:
+
+```shell
+just k3s-kubeconfig
+```
+
+| Variable | Purpose | Default |
+|---|---|---|
+| `DPL_K3S_HOST` | ssh target, and the address written into the kubeconfig | **required**, or `DPL_LAB_IP` |
+| `DPL_K3S_SSH_USER` | user on that machine | `root` |
+| `DPL_K3S_SSH_KEY` | private key for that user | `DPL_LAB_IDENTITY`, else ssh's own |
+| `DPL_K3S_REMOTE_KUBECONFIG` | where k3s writes it on the node | `/etc/rancher/k3s/k3s.yaml` |
+| `DPL_K3S_LOCAL_KUBECONFIG` | where to copy it locally | `~/.kube/<context>.yaml` |
+| `DPL_K3S_CONTEXT` | context name after the copy | `dmp-demo` |
+
+This is the only step that has to know anything about your machine. Everything after it is
+`kubectl` and `helmfile`, so bring whatever you like — this VM, an EC2 instance, bare
+metal — and the six values above are the whole interface.
+
+The two `DPL_LAB_*` fallbacks exist so the Hetzner path needs no duplication: those scripts
+write the address and the key they used to `~/.cache/dbz-lab/<name>.env`, and sourcing that
+file before the recipe supplies both. An explicit `DPL_K3S_*` always takes precedence, so a
+k3s box that is not the lab box behaves as you would expect. Ignore them entirely if you
+brought your own machine.
+
+!!! warning "`DPL_K3S_HOST` has to satisfy kubectl too, not just ssh"
+
+    It is passed to `ssh` *and* substituted into the kubeconfig as the API server
+    address. An alias defined only in `~/.ssh/config` connects happily and then yields a
+    kubeconfig nothing can resolve. Use an IP or a real DNS name, and make sure the API
+    certificate covers it — `--tls-san`, which
+    [`k3s-install.sh`](#install-k3s) derives from the detected public address.
+
+The recipe is a convenience, not a dependency. By hand it is:
 
 ```shell
 ssh <user>@<ip> 'sudo cat /etc/rancher/k3s/k3s.yaml' \
@@ -109,12 +141,22 @@ chmod 600 ~/.kube/dmp-demo.yaml
 kubectl --kubeconfig ~/.kube/dmp-demo.yaml config rename-context default dmp-demo
 ```
 
-!!! note "`just cluster-recreate` does not do this yet"
+Piping through `sed` avoids both the `sed -i` incompatibility between macOS and Linux and
+any need to loosen the file mode on the node.
 
-    It handles `DPL_CLUSTER_TYPE=kind` and refuses `k3s` outright rather than doing
-    something surprising. The `DPL_K3S_*` variables in `.env.example` name the host, the
-    SSH identity and the kubeconfig paths so the values have a settled home, but no recipe
-    consumes them today — the fetch above is manual.
+Neither form sets `KUBECONFIG`. `just apply` targets whatever context you are already on,
+so export it in the shell you deploy from:
+
+```shell
+export KUBECONFIG=~/.kube/dmp-demo.yaml
+```
+
+!!! note "`just cluster-recreate` is Kind-only, deliberately"
+
+    A Kind cluster is disposable by construction, so recreating it costs nothing. A k3s
+    cluster is a machine you brought, and the first act of a recreate would be to
+    uninstall it — via `/usr/local/bin/k3s-uninstall.sh`, which only exists if k3s came
+    from `get.k3s.io` at all. The recipe refuses and points at `just k3s-kubeconfig`.
 
 ## Configure
 

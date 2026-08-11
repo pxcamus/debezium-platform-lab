@@ -25,6 +25,8 @@
 #   DPL_K3S_VERSION  exact version, overrides the channel   (default: unset)
 #                    e.g. v1.33.4+k3s1 — pin this if a post has to stay reproducible
 #   DPL_K3S_TLS_SAN  extra API server SANs, comma-separated (default: detected public IPv4)
+#                    added to the detected address rather than replacing it — and used
+#                    INSTEAD of it if detection fails (NAT, no public IPv4)
 #
 # Two deliberate non-choices, both of which most k3s guides get wrong for this repo:
 #
@@ -78,13 +80,34 @@ preflight() {
 # The API server certificate otherwise covers only 127.0.0.1 and the private address, so a
 # kubeconfig copied to your laptop fails TLS verification and you end up reaching for
 # --insecure-skip-tls-verify. Resolved at runtime; no address is committed anywhere.
+#
+# -4 is load-bearing on a dual-stack host: curl prefers IPv6, and every one of these
+# services answers with whichever address the request arrived on. An IPv6 answer is not a
+# usable substitute here — the SAN has to be the address the kubeconfig will dial.
+# Each service is validated on its own so a bad answer from the first still falls through
+# to the second, rather than being treated as success merely for being non-empty.
 public_ip() {
-  local ip
-  ip="$(curl -fsS --max-time 10 https://ifconfig.me 2>/dev/null || true)"
-  [[ -n "${ip}" ]] || ip="$(curl -fsS --max-time 10 https://api.ipify.org 2>/dev/null || true)"
-  [[ "${ip}" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] ||
-    die "could not determine this machine's public IPv4 address — set DPL_K3S_TLS_SAN"
-  echo "${ip}"
+  local ip svc
+
+  for svc in https://ifconfig.me https://api.ipify.org; do
+    ip="$(curl -4 -fsS --max-time 10 "${svc}" 2>/dev/null || true)"
+    if [[ "${ip}" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+      echo "${ip}"
+      return 0
+    fi
+  done
+
+  # Detection is a convenience, not a requirement — a host behind NAT, or one with no
+  # public IPv4 at all, cannot answer this and has to be told. The first SAN is what the
+  # kubeconfig will dial, so it is the right stand-in.
+  if [[ -n "${DPL_K3S_TLS_SAN}" ]]; then
+    echo "${DPL_K3S_TLS_SAN%%,*}"
+    return 0
+  fi
+
+  die "could not determine this machine's public IPv4 address.
+       Set DPL_K3S_TLS_SAN to it and re-run:
+         DPL_K3S_TLS_SAN=<public-ip> bash -s"
 }
 
 # RPM-based distributions ship firewalld enabled. It drops pod-to-pod and pod-to-service
@@ -148,15 +171,19 @@ install_k3s() {
   # The detected address is always a SAN and DPL_K3S_TLS_SAN adds to it rather than
   # replacing it, so naming a hostname cannot cost you access by IP.
   local sans="${ip}${DPL_K3S_TLS_SAN:+,${DPL_K3S_TLS_SAN}}"
-  local exec_args="" san
+  local exec_args="" san seen=""
 
-  # One --tls-san per entry; the installer passes the string to the unit verbatim.
+  # One --tls-san per entry, de-duplicated: when detection falls back to DPL_K3S_TLS_SAN
+  # the two are the same address, and repeating it in the unit is noise in every later
+  # `systemctl cat k3s`.
   while IFS= read -r san; do
-    if [[ -n "${san}" ]]; then
-      exec_args+=" --tls-san ${san}"
-    fi
+    [[ -n "${san}" ]] || continue
+    case ",${seen}," in *",${san},"*) continue ;; esac
+    seen="${seen}${seen:+,}${san}"
+    exec_args+=" --tls-san ${san}"
   done <<<"${sans//,/$'\n'}"
   exec_args="${exec_args# }"
+  sans="${seen}"
 
   if [[ -n "${DPL_K3S_VERSION}" ]]; then
     step "k3s ${DPL_K3S_VERSION} (SANs: ${sans})"
@@ -183,42 +210,14 @@ wait_for_node() {
     echo "warning: Traefik is not ready yet — 'kubectl -n kube-system get helmchart' to see why" >&2
 }
 
+# Deliberately one line. What to do next — fetch the kubeconfig, set DPL_K3S_HOST, create
+# the two DNS records, choose an ACME endpoint — is documentation, and duplicating it here
+# only creates a second copy to keep true. docs/guides/k3s.md owns it.
 summary() {
   local ip="$1"
 
-  cat <<EOF
-
-  k3s is up: $(${SUDO} k3s kubectl version -o yaml 2>/dev/null | awk '/gitVersion/ {print $2; exit}')
-
-  Fetch the kubeconfig FROM YOUR WORKSTATION. The server field on the node says
-  127.0.0.1, so it is rewritten in flight — piping through sed avoids the sed -i
-  incompatibility between macOS and Linux, and \`sudo cat\` avoids weakening the file mode:
-
-    ssh <user>@${ip} 'sudo cat /etc/rancher/k3s/k3s.yaml' \\
-      | sed 's#127.0.0.1#${ip}#' > ~/.kube/dmp-demo.yaml
-    chmod 600 ~/.kube/dmp-demo.yaml
-    kubectl --kubeconfig ~/.kube/dmp-demo.yaml config rename-context default dmp-demo
-
-  Then, in the repository root .env:
-
-    DPL_K3S_HOST=${ip}
-    DPL_K3S_LOCAL_KUBECONFIG=~/.kube/dmp-demo.yaml
-    DPL_K3S_CONTEXT=dmp-demo
-
-  DNS — both records, because the wildcard does not cover the apex it hangs off:
-
-    <DPL_DOMAIN>      A   ${ip}
-    *.<DPL_DOMAIN>    A   ${ip}
-
-  This address is ephemeral by design. Rebuilding the box changes it and both records
-  have to follow. While iterating, point the issuer at Let's Encrypt staging — set
-  acme.server in deploy/values/dns01-gandi/public.yaml.gotmpl — because production
-  allows only 5 identical certificate requests per week and a few rebuilds will spend
-  them. Switch to production for the run you actually screenshot.
-
-  Tear the machine down when the post is out; nothing here is meant to outlive it.
-
-EOF
+  echo
+  echo "k3s is up on ${ip}. Next steps: docs/guides/k3s.md"
 }
 
 main() {

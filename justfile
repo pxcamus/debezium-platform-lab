@@ -26,7 +26,59 @@ kind-recreate:
     kind create cluster --name "${name}" --config "${config}"
     kubectl config use-context "kind-${name}"
 
-# Recreate whatever DPL_CLUSTER_TYPE points at (kind | k3s). Destructive.
+# Copy the kubeconfig off an existing k3s node and name its context locally.
+[group('cluster')]
+k3s-kubeconfig:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    source scripts/lib/env.sh
+
+    # Reads one file, writes one file, never touches the cluster. The DPL_LAB_* are
+    # fallbacks for the Hetzner path only — hcloud-up.sh records both in its state
+    # file, so an explicit DPL_K3S_* always wins. docs/guides/k3s.md owns the details.
+    host="${DPL_K3S_HOST:-${DPL_LAB_IP:-}}"
+    key="${DPL_K3S_SSH_KEY:-${DPL_LAB_IDENTITY:-}}"
+    user="${DPL_K3S_SSH_USER:-root}"
+    remote_kc="${DPL_K3S_REMOTE_KUBECONFIG:-/etc/rancher/k3s/k3s.yaml}"
+    context="${DPL_K3S_CONTEXT:-dmp-demo}"
+    local_kc="${DPL_K3S_LOCAL_KUBECONFIG:-${HOME}/.kube/${context}.yaml}"
+
+    if [[ -z "${host}" ]]; then
+      echo "DPL_K3S_HOST is required — see docs/guides/k3s.md#point-kubectl-at-it" >&2
+      exit 1
+    fi
+
+    # A quoted value in .env is never tilde-expanded on source, and an unexpanded ~
+    # yields a literal ~ directory in the repo rather than an error.
+    local_kc="${local_kc/#\~/$HOME}"
+
+    # IdentitiesOnly: ssh otherwise offers its defaults plus the agent, and a key kept
+    # under its own name is never tried.
+    ssh_opts=(-o ConnectTimeout=15)
+    if [[ -n "${key}" ]]; then
+      ssh_opts+=(-i "${key/#\~/$HOME}" -o IdentitiesOnly=yes)
+    fi
+
+    # A root image may not have sudo installed, and does not need it.
+    if [[ "${user}" == "root" ]]; then remote_sudo=""; else remote_sudo="sudo "; fi
+
+    echo "==> ${user}@${host}:${remote_kc} -> ${local_kc}"
+    mkdir -p "$(dirname "${local_kc}")"
+
+    # k3s writes 127.0.0.1 as the server address, so rewrite it in flight. Staged through
+    # a temp file so a failed fetch cannot truncate a kubeconfig that was working.
+    ssh -n "${ssh_opts[@]}" "${user}@${host}" "${remote_sudo}cat ${remote_kc}" \
+      | sed "s#127.0.0.1#${host}#" > "${local_kc}.tmp"
+    mv "${local_kc}.tmp" "${local_kc}"
+    chmod 600 "${local_kc}"
+
+    kubectl --kubeconfig "${local_kc}" config rename-context default "${context}" >/dev/null
+    kubectl --kubeconfig "${local_kc}" get nodes
+
+    echo
+    echo "    export KUBECONFIG=${local_kc}"
+
+# Recreate whatever DPL_CLUSTER_TYPE points at. Destructive. Kind only.
 [group('cluster')]
 cluster-recreate:
     #!/usr/bin/env bash
@@ -38,8 +90,11 @@ cluster-recreate:
         just kind-recreate
         ;;
       k3s)
-        echo "k3s recreate is not migrated yet — the Go version targeted AWS" >&2
-        echo "(ec2-user, context k3s-aws) and the lab is now Hetzner." >&2
+        # Deliberately not implemented. A Kind cluster is disposable by construction; a
+        # k3s cluster is a machine you brought, and the first act of a recreate would be
+        # to uninstall it. Not this recipe's call to make.
+        echo "cluster-recreate handles kind only — a k3s cluster is a machine you own." >&2
+        echo "Already running k3s: just k3s-kubeconfig. Otherwise: docs/guides/k3s.md" >&2
         exit 1
         ;;
       *)

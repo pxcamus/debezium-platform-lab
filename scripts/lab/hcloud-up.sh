@@ -265,17 +265,9 @@ main() {
 
     ssh${DPL_LAB_IDENTITY:+ -i ${DPL_LAB_IDENTITY}} lab@${server_ip}
 
-  The machine is intentionally bare — no docker, no kubectl, no helm. That is the point:
-  note what it is missing before you install anything, because a bootstrapped machine can
-  no longer tell you.
-
-  Bootstrap it with:
+  Bootstrap the machine with:
 
     ssh${DPL_LAB_IDENTITY:+ -i ${DPL_LAB_IDENTITY}} lab@${server_ip} 'bash -s' < scripts/lab/bootstrap.sh
-
-  Ingress hostnames without touching /etc/hosts:
-
-    DPL_DOMAIN=${server_ip//./-}.sslip.io
 
   Destroy it when you are done — it bills until then:
 
