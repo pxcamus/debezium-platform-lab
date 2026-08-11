@@ -29,12 +29,33 @@ config:
     insecure_oidc_allow_unverified_email = true
     cookie_domains = [".{{ requiredEnv "DPL_DOMAIN" }}"]
     cookie_secure = true
+    # Both derived from the realm, not chosen — Keycloak owns the clock here.
+    #
+    # cookie_refresh defaults to 0 (never renew), so the proxy would keep forwarding the
+    # access token it got at login. Realm settings -> Tokens -> Access Token Lifespan is
+    # 5m, so that token dies five minutes in and the conductor 401s every /api/ call
+    # afterwards, while the UI keeps loading — the stage SPA shell needs no token. Must
+    # stay BELOW the access token lifespan.
+    cookie_refresh = "4m"
+    # cookie_expire defaults to 168h. Realm settings -> Sessions -> SSO Session Max is 10h,
+    # so anything longer is a browser holding a valid proxy session for an identity session
+    # Keycloak stopped believing in days earlier. Cap it at the realm's ceiling.
+    cookie_expire = "10h"
     whitelist_domains = [".{{ requiredEnv "DPL_DOMAIN" }}"]
     reverse_proxy = true
     # pass_authorization_header (NOT set_authorization_header) injects Authorization: Bearer
     # <id_token> into the UPSTREAM request so the conductor resource server validates it.
     # set_authorization_header only sets it on the auth RESPONSE (forward-auth mode) — useless here.
     pass_authorization_header = true
+    # The ACCESS token, in X-Forwarded-Access-Token. The conductor reads this one rather
+    # than Authorization (QUARKUS_OIDC_TOKEN_HEADER in values/dmp/public.yaml.gotmpl),
+    # because only the access token carries realm_access.roles — the ID token above has
+    # identity claims and nothing else, so role-based policy is impossible with it.
+    # There is no legacy option to put the access token in Authorization itself:
+    # pass_authorization_header is hardcoded to the id_token claim, and overriding that
+    # needs oauth2-proxy's alpha config. Moving the reader is cheaper than moving the
+    # writer. Both headers are sent; Authorization is now unused by the upstream.
+    pass_access_token = true
     skip_provider_button = true
     # conductor path has a trailing slash so it's a subtree (prefix) match — "/api" without
     # it is an exact match and /api/pipelines falls through to the stage "/" upstream.
@@ -42,6 +63,15 @@ config:
       "http://conductor.{{ env "DPL_NAMESPACE" | default "dmp" }}.svc.cluster.local:8080/api/",
       "http://stage.{{ env "DPL_NAMESPACE" | default "dmp" }}.svc.cluster.local:3000/"
     ]
+
+# PKCE. Passed as a CLI flag rather than a configFile key: oauth2-proxy has a history of
+# rejecting code_challenge_method in the config file and silently ignoring the env var, while
+# --code-challenge-method has always worked. Must match the Keycloak client's "Proof Key for
+# Code Exchange Code Challenge Method" — if the client enforces S256 and this is absent, every
+# login dies at the authorization request with `invalid_request: Missing parameter:
+# code_challenge_method`. Set this side FIRST when enabling PKCE on a running deployment.
+extraArgs:
+  code-challenge-method: S256
 
 # Single front door for the dmp host (path / catches everything; oauth2-proxy serves /oauth2/*
 # internally and reverse-proxies the rest). Lives in identity, reusing the wildcard cert the

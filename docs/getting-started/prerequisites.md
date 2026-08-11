@@ -11,12 +11,23 @@ images — is pulled during the deployment.
 | [kubectl](https://kubernetes.io/docs/tasks/tools/) | cluster access |
 | [Docker](https://www.docker.com/) | container runtime Kind runs on |
 
-The [helm-diff](https://github.com/databus23/helm-diff) plugin is worth installing —
-helmfile uses it to show what an apply will change before it changes it:
+The [helm-diff](https://github.com/databus23/helm-diff) plugin is **required**, not
+optional — helmfile runs a diff for every release that already exists, so `just apply`
+works once on a fresh cluster and then fails with `unknown command "diff" for "helm"`:
 
 ```shell
-helm plugin install https://github.com/databus23/helm-diff
+helm plugin install https://github.com/databus23/helm-diff --verify=false
 ```
+
+!!! note "`--verify=false` is needed on Helm 4, and rejected by Helm 3"
+
+    Helm 4 verifies plugin provenance on install and helm-diff publishes none, so the
+    plain command fails there. Helm 3 has no such flag and rejects it. Drop it if
+    `helm version` reports v3.
+
+`just apply` passes `--skip-diff-on-install` unconditionally, so a first install on an
+empty cluster never invokes the plugin. That is why a missing plugin looks like a
+second-run problem.
 
 Optional: [kubeconform](https://github.com/yannh/kubeconform), used by `scripts/validate-helm.sh`
 and CI to check rendered manifests against the Kubernetes schemas. You only need it if you

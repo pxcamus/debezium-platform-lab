@@ -41,6 +41,12 @@ config:
       "http://kafbat-ui-kafka-ui.kafka.svc.cluster.local:80/"
     ]
 
+# PKCE — same as the dmp instance, and for the same reasons: CLI flag rather than a
+# configFile key, and it has to match the Keycloak client's Proof Key for Code Exchange
+# setting or every login fails at the authorization request.
+extraArgs:
+  code-challenge-method: S256
+
 # The kafbat host's single front door. Lives in identity, reusing the wildcard cert the
 # keycloak release materialized there.
 ingress:

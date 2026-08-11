@@ -342,8 +342,8 @@ releases:
 
   # OpenTelemetry Operator — reconciles the OpenTelemetryCollector CR that the
   # debezium-platform chart creates when monitoring.otel.enabled=true. On the public
-  # profile cert-manager is present, so the operator's admission-webhook certs work
-  # with no extra config. Everywhere else there is no cert-manager and the chart would
+  # profile cert-manager issues the operator's admission-webhook certs, so the chart is
+  # left at its default. Everywhere else there is no cert-manager and the chart would
   # emit a cert-manager Issuer + Certificate the cluster cannot resolve, so
   # values/opentelemetry-operator/self-signed.yaml switches the webhook to a
   # self-signed auto-generated cert instead.
@@ -357,6 +357,18 @@ releases:
       app: opentelemetry-operator
       component: monitoring
       infra: "true"
+{{- if $public }}
+    # cert-manager being in the release list is not the same as it being in the cluster.
+    # Without this edge both land in the first concurrent wave, and helm validates the
+    # rendered manifest against API discovery before installing anything — so the Issuer
+    # and Certificate above fail with `no matches for kind "Certificate"` seconds into a
+    # run whose cert-manager release goes on to succeed half a minute later. Only bites
+    # on a cluster that has never had cert-manager, which is why re-running looks like a
+    # fix. Gated on $public for the same reason as kube-prometheus-stack's edge above:
+    # an edge to a release that is not installed is not reliably a no-op.
+    needs:
+      - cert-manager/cert-manager
+{{- end }}
 {{- if not $public }}
     values:
       - values/opentelemetry-operator/self-signed.yaml

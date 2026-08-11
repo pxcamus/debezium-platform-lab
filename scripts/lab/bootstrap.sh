@@ -100,9 +100,22 @@ install_helm() {
   curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 |
     sudo DESIRED_VERSION="${DPL_HELM_VERSION}" bash
 
-  # helm-diff is what makes `helmfile diff` useful; helmfile prompts for it otherwise.
-  helm plugin install https://github.com/databus23/helm-diff >/dev/null 2>&1 ||
-    echo "note: helm-diff plugin already present or unavailable"
+  # helm-diff is not optional: `just apply` runs a diff for every release that already
+  # exists, so a workstation without it works exactly once and then fails with
+  # `unknown command "diff" for "helm"` on the second run.
+  #
+  # Helm 4 verifies plugins on install and helm-diff publishes no provenance, so the
+  # plain command fails there; --verify=false is not a flag Helm 3 has, hence the
+  # fallback. Failures are NOT swallowed — the previous version discarded the output and
+  # reported the plugin as "already present or unavailable", which is how a bootstrapped
+  # machine ends up without it and is told nothing is wrong.
+  if helm plugin list 2>/dev/null | grep -q '^diff[[:space:]]'; then
+    echo "helm-diff already installed"
+  else
+    helm plugin install https://github.com/databus23/helm-diff --verify=false ||
+      helm plugin install https://github.com/databus23/helm-diff ||
+      die "helm-diff install failed; \`just apply\` cannot upgrade an existing release without it"
+  fi
 }
 
 install_helmfile() {
