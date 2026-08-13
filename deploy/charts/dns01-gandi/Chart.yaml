@@ -1,0 +1,13 @@
+apiVersion: v2
+name: dns01-gandi
+description: >-
+  ACME ClusterIssuer solving DNS-01 through the Gandi webhook. Paired with the
+  cert-manager-webhook-gandi release (same components.dns01-gandi flag), which
+  supplies the webhook itself and the gandi-credentials Secret this issuer points
+  at. Split out of the profile axis because the solver is registrar-specific: the
+  platform's actual contract is "a ClusterIssuer named letsencrypt-prod that can
+  issue for your zone", and anyone whose DNS lives elsewhere satisfies it their
+  own way instead of enabling this.
+type: application
+version: 0.1.0
+appVersion: "1"

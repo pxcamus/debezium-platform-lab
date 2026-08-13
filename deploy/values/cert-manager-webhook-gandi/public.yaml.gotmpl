@@ -1,0 +1,15 @@
+# cert-manager DNS-01 solver webhook for Gandi — public profile, gated on
+# components.dns01-gandi. Pairs with the dns01-gandi release, which creates the
+# letsencrypt-prod ClusterIssuer that dispatches to this webhook.
+#
+# The webhook is not a controller: it registers as an aggregated APIService under
+# `groupName` and cert-manager calls it synchronously to write/delete the
+# _acme-challenge TXT record. It is idle between renewals.
+#
+# The PAT arrives as an env var rather than a *.secret.yaml overlay so following
+# the guide is one file (`cp .env.example .env`) rather than two. The chart turns
+# this value into the `gandi-credentials` Secret in the cert-manager namespace —
+# which is where a ClusterIssuer resolves its secrets, NOT the namespace of the
+# Certificate that used it. requiredEnv, not env: a chart that renders with an
+# empty PAT deploys a webhook that fails every challenge with a 401.
+gandiPat: {{ requiredEnv "DPL_GANDI_PAT" | quote }}

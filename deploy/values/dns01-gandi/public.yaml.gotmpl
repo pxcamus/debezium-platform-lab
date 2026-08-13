@@ -1,0 +1,6 @@
+# ClusterIssuer letsencrypt-prod — public profile, gated on components.dns01-gandi.
+#
+# Only the ACME account email is environment-specific; the solver wiring lives in
+# the chart's values.yaml because it is fixed by the webhook, not by the operator
+# of the cluster. See deploy/charts/dns01-gandi/ for the shape.
+email: {{ requiredEnv "DPL_ACME_EMAIL" }}

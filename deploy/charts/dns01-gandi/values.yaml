@@ -1,0 +1,31 @@
+# The name every Certificate in this repo references (charts/keycloak sets
+# tls.certIssuer to it). Changing it here means changing it there too — it is the
+# contract, not an implementation detail.
+issuerName: letsencrypt-prod
+
+# ACME account email. No default on purpose: Let's Encrypt sends expiry warnings
+# here, and a placeholder address silently disables them. Injected from
+# DPL_ACME_EMAIL by deploy/values/dns01-gandi/public.yaml.gotmpl.
+email: ""
+
+acme:
+  # Production directory. Point at https://acme-staging-v02.api.letsencrypt.org/directory
+  # while iterating: staging has far looser rate limits and issues untrusted certs.
+  # Note the account is keyed per-server, so switching also switches ACME accounts.
+  server: https://acme-v02.api.letsencrypt.org/directory
+  # Secret holding the ACME account private key, created by cert-manager on first
+  # registration. Lives in cert-manager's namespace because this is a ClusterIssuer.
+  privateKeySecretName: letsencrypt-prod
+
+solver:
+  # groupName is the API group the webhook registers as an aggregated APIService,
+  # and it must match the webhook deployment's own --group-name (chart default
+  # acme.bwolf.me, kept by the SINTEF fork). A mismatch surfaces as challenges
+  # failing with "no solver found", not as a startup error.
+  groupName: acme.bwolf.me
+  solverName: gandi
+  # cert-manager forwards `config` to the webhook verbatim without parsing it, so
+  # this shape is defined by the webhook, not by cert-manager. The webhook chart
+  # hard-codes the Secret name (it is NOT release-name prefixed) and reads key `pat`.
+  patSecretName: gandi-credentials
+  patSecretKey: pat

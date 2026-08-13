@@ -1,4 +1,4 @@
-# Our own Traefik Ingress (operator ingress is disabled in keycloak.yaml).
+# Our own Ingress (the operator's own ingress is disabled in keycloak.yaml).
 # Fronts the operator-created keycloak-service (http:8080); edge TLS from the
 # wildcard secret the Certificate produces in this namespace.
 apiVersion: networking.k8s.io/v1
@@ -11,7 +11,7 @@ metadata:
     app.kubernetes.io/instance: {{ .Release.Name }}
     app.kubernetes.io/managed-by: {{ .Release.Service }}
 spec:
-  ingressClassName: traefik
+  ingressClassName: {{ .Values.ingress.className }}
   rules:
     - host: auth.{{ .Values.domain }}
       http:

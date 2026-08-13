@@ -1,6 +1,7 @@
 nav:
   - index.md
   - Deploy to k3s: k3s.md
+  - Provision a Hetzner host: hetzner.md
   - Deploy to a remote cluster: remote-cluster.md
   - Deploy on AWS: aws.md
   - Seeding demo data: seeding-data.md

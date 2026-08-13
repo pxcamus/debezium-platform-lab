@@ -5,7 +5,7 @@
 #   helmfile --file deploy/helmfile.yaml.gotmpl --selector app=kube-prometheus-stack apply
 # (or as part of --selector infra=true).
 #
-# This is not the homelab file with smaller numbers — a throwaway single-node Kind
+# This is not the public file with smaller numbers — a throwaway single-node Kind
 # cluster differs in kind, not degree:
 #
 #   - No persistence anywhere. `just kind-recreate` destroys the cluster, so a PVC
@@ -47,7 +47,7 @@ prometheus:
   prometheusSpec:
     # Discover ServiceMonitors / PodMonitors / rules from ALL namespaces regardless
     # of the helm-release label, so the DMP ServiceMonitor (namespace dmp) is scraped
-    # even though it is created by a different chart. Same as homelab and aws.
+    # even though it is created by a different chart. Same as the public profile.
     serviceMonitorSelectorNilUsesHelmValues: false
     podMonitorSelectorNilUsesHelmValues: false
     ruleSelectorNilUsesHelmValues: false

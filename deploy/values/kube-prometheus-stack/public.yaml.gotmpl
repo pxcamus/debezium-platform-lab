@@ -1,16 +1,16 @@
-# kube-prometheus-stack — homelab (k3s + Traefik + cert-manager wildcard TLS)
+# kube-prometheus-stack — public profile (k3s + Traefik + cert-manager wildcard TLS)
 #
 # Wired into deploy/helmfile.yaml.gotmpl as the `kube-prometheus-stack` release,
-# gated on DPL_ENV=homelab, labelled infra:true. Applied via:
+# selected by DPL_ENV=public, labelled infra:true. Applied via:
 #   helmfile --file deploy/helmfile.yaml.gotmpl --selector app=kube-prometheus-stack apply
-# (or as part of --selector infra=true / `mage helm:all` / `mage helm:monitoring`).
+# (or as part of --selector infra=true, i.e. `just apply --selector infra=true`).
 #
 # The Grafana admin password is NOT in this committed file — supply it from
-# deploy/values/kube-prometheus-stack/homelab.secret.yaml, a git-ignored overlay
+# deploy/values/kube-prometheus-stack/public.secret.yaml, a git-ignored overlay
 # (matched by deploy/values/**/*.secret.yaml) layered on top of this file.
 #
 # Grafana is exposed at grafana.<DPL_DOMAIN> and reuses the same wildcard TLS
-# secret name as the other homelab ingresses (see deploy/values/zot/homelab.yaml.gotmpl
+# secret name as the other public ingresses (see deploy/values/zot/public.yaml.gotmpl
 # and certs/wildcard-example-com.yaml).
 
 grafana:
@@ -20,15 +20,23 @@ grafana:
     enabled: true
     storageClassName: local-path   # k3s default
     size: 5Gi
+  # Deliberately NOT published. Two reasons, either sufficient:
+  #
+  # 1. The wildcard TLS Secret is materialized by the keycloak release in the
+  #    `identity` namespace, and Secrets do not cross namespaces. An Ingress here
+  #    would name a Secret that does not exist in `monitoring` and Traefik would
+  #    fall back to its self-signed default — a browser warning on every visit.
+  # 2. Nothing gates it. oauth2-proxy fronts dmp and kafbat; Grafana would be the
+  #    one host on the domain protected by a static admin password.
+  #
+  # Reach it with a port-forward instead:
+  #   kubectl -n monitoring port-forward svc/kube-prometheus-stack-grafana 3000:80
+  #
+  # To publish it properly, prefer Grafana's own OIDC (grafana.ini auth.generic_oauth
+  # against the dmp realm) over a third oauth2-proxy — it supports OIDC natively and
+  # can map realm roles onto Grafana roles, which a proxy in front cannot.
   ingress:
-    enabled: true
-    ingressClassName: traefik
-    hosts:
-      - grafana.{{ requiredEnv "DPL_DOMAIN" }}
-    tls:
-      - secretName: wildcard-{{ requiredEnv "DPL_DOMAIN" | replace "." "-" }}-tls
-        hosts:
-          - grafana.{{ requiredEnv "DPL_DOMAIN" }}
+    enabled: false
 
 prometheus:
   prometheusSpec:

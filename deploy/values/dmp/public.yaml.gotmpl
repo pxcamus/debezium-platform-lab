@@ -12,7 +12,7 @@ database:
 ingress:
   # Disabled — oauth2-proxy owns the dmp.${DPL_DOMAIN} ingress. It reverse-proxies to the
   # stage + conductor Services and runs the Keycloak login in front, so a separate chart
-  # ingress here would just collide on the same host. See values/oauth2-proxy/homelab.yaml.gotmpl.
+  # ingress here would just collide on the same host. See values/oauth2-proxy/public.yaml.gotmpl.
   enabled: false
 debezium-operator:
   enabled: false
@@ -26,9 +26,32 @@ conductor:
     authServerUrl: https://auth.{{ requiredEnv "DPL_DOMAIN" }}/realms/dmp
     clientId: conductor
     apiPolicy: authenticated
-    # audience left empty on purpose during the oauth2-proxy bridge phase: the token is
-    # issued for the oauth2-proxy client, so aud enforcement would 401 it. Set this (plus
-    # a Keycloak audience mapper) once stage becomes the native OIDC client.
+    # Enforced. Requires an Audience mapper on the oauth2-proxy client's dedicated scope
+    # (Included Custom Audience = conductor, "Add to ID token" ON) — without it the ID
+    # token oauth2-proxy forwards carries aud=[oauth2-proxy] and every /api/ call 401s
+    # while the UI still loads, because the stage SPA shell needs no token. Mapper first,
+    # then this. Note the two audience fields on that mapper are a fallback chain, not a
+    # pair: a populated "Included Client Audience" makes the custom one dead config.
+    audience: conductor
+# Read the bearer from X-Forwarded-Access-Token instead of Authorization. oauth2-proxy puts
+# the ACCESS token there (pass_access_token) and the ID token in Authorization
+# (pass_authorization_header, hardcoded to the id_token claim). The access token is the one
+# that carries realm_access.roles, so this is what makes role-based policy possible later;
+# the ID token cannot express it. No authorization-scheme is set because the header holds a
+# raw token with no "Bearer " prefix.
+env:
+  - name: QUARKUS_OIDC_TOKEN_HEADER
+    value: X-Forwarded-Access-Token
+  # The chart derives one OTLP endpoint for both consumers from the collector's HTTP
+  # receiver port (_helpers.tpl otelCollectorEndpoint -> :4318). That is right for the
+  # Debezium pipeline but wrong for Quarkus, whose OTLP exporter defaults to gRPC — it
+  # then speaks HTTP/2 at an HTTP/1.1 listener and every export fails with
+  #   "First received frame was not SETTINGS. Hex dump for first 5 bytes: 485454502f"
+  # (485454502f is "HTTP/"). Traces are silently dropped and the log fills at ERROR.
+  # Matching the protocol to the port it was already given is cheaper than routing
+  # Quarkus to :4317, which would need a chart change.
+  - name: QUARKUS_OTEL_EXPORTER_OTLP_PROTOCOL
+    value: http/protobuf
 stage:
   imagePullPolicy: Always
 monitoring:
