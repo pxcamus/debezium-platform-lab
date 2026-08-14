@@ -5,7 +5,9 @@ copyright: Documentation for debezium-platform-lab. Debezium is a trademark of R
 
 repo_url: https://github.com/pxcamus/debezium-platform-lab
 repo_name: pxcamus/debezium-platform-lab
-edit_uri: edit/main/docs/
+# blob/, not edit/ — the action links to the rendered source rather than GitHub's web
+# editor. Contributions still come by fork and PR; the page just stops inviting them.
+edit_uri: blob/main/docs/
 
 use_directory_urls: true
 docs_dir: docs
@@ -28,7 +30,7 @@ theme:
     - search.suggest
     - search.highlight
     - search.share
-    - content.action.edit
+    - content.action.view
     - content.code.copy
     - content.tooltips
   palette:
