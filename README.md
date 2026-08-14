@@ -40,3 +40,21 @@ and what to do when it doesn't:
 - **[Deploy the stack](https://lab.1int.io/getting-started/deploy/)** — configure, create, apply, verify
 - **[Troubleshooting](https://lab.1int.io/troubleshooting/)** — when it doesn't
 
+---
+
+## Blog series
+
+A series on [debezium.io](https://debezium.io/blog/) walks through this repository. Each post is
+written against a tag — check it out before following along, because the interface moves.
+
+| Post | Published | Written against |
+|---|---|---|
+| [Running the Debezium Platform on AWS: PostgreSQL to Amazon Kinesis](https://debezium.io/blog/2026/07/24/debezium-platform-on-aws-postgres-to-kinesis/) | 2026-07-24 | `v0.1.0` |
+| Single Sign-On for the Debezium Platform, part 1 — forthcoming | — | `v0.3.0` |
+
+> The AWS post was written against `v0.1.0`, when the task runner was `mage` — its
+> `mage cluster:recreate` and `mage helm:platform` have no equivalent on `main`, which uses `just`.
+> Run `git checkout v0.1.0` to follow it.
+
+Parts 2 (Entra ID brokering) and 3 (RBAC groundwork) are forthcoming.
+
