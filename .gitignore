@@ -24,6 +24,18 @@ deploy/values/**/*.secret.yaml
 # Docs toolchain virtualenv, created on demand by `mage docs:serve` / `docs:build`
 /.venv
 
+# Helm subchart tarballs, fetched on demand.
+#
+# `helm dependency update/build` writes dependencies into a chart's charts/ directory,
+# and helmfile runs that build itself before every template/diff/apply — so a committed
+# tarball is refetched content, not a source. Chart.yaml pins the version and Chart.lock
+# records the digest, which is what actually makes the dependency reproducible; the blob
+# only made version bumps show up as a delete-plus-add of a binary.
+#
+# Local path dependencies (deploy/charts/debezium-platform/charts/database) are
+# directories, not tarballs, so they stay tracked.
+deploy/charts/**/charts/*.tgz
+
 # IDE
 .idea/
 

@@ -1,2 +1,11 @@
 storage:
   storageClass: local-path
+
+service:
+  # A LoadBalancer for 5432, off by default. See templates/postgresql.yaml for why
+  # this is not something to switch on casually on a publicly addressable cluster.
+  loadBalancer:
+    enabled: false
+    # CIDRs allowed to reach the LoadBalancer when it is enabled. Empty means
+    # "everyone", which is exactly the case worth being explicit about.
+    sourceRanges: []
