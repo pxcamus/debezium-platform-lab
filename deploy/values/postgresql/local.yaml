@@ -1,0 +1,3 @@
+# Kind. Nothing to override: the chart defaults (local-path storage, no
+# LoadBalancer) are already the local shape. The file exists so the helmfile
+# release can reference values/postgresql/{{ env }}.yaml unconditionally.

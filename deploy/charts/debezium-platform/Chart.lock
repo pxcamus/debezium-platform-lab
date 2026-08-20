@@ -1,9 +1,9 @@
 dependencies:
 - name: debezium-operator
   repository: https://charts.debezium.io
-  version: 3.2.0-beta1
+  version: 3.7.0-alpha2
 - name: database
   repository: ""
   version: 0.0.1
-digest: sha256:58c01bd76fed0a6c7102ac322f9e46698777783deb8c173d70ec8bf741f04267
-generated: "2026-04-16T19:54:24.732894+02:00"
+digest: sha256:6e0ffb76ea6685b5d0fe7284658abf30e00a2caba59e5c5f5661475643c9caa0
+generated: "2026-08-18T16:45:45.41085613+02:00"

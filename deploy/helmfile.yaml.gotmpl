@@ -241,6 +241,8 @@ releases:
       app: postgresql-cluster
       component: postgres
       infra: "true"
+    values:
+      - values/postgresql/{{ $env }}.yaml
     needs:
       - databases/cnpg-operator
 
@@ -529,3 +531,34 @@ releases:
         value: {{ env "DPL_IMAGE_TAG" | default "nightly" }}
       - name: debezium-operator.enabled
         value: {{ $bundledOperator }}
+      # The bundled subchart carries `image: quay.io/debezium/operator:3.2.0.Beta1` in its
+      # own values.yaml, and nothing here overrode it — so DPL_DEBEZIUM_OPERATOR_TAG, which
+      # the standalone debezium-operator release above already honours, was inert in bundled
+      # mode. Bundled is the DEFAULT, which is how the operator ends up on a beta while
+      # conductor and stage track nightly: exactly the skew the comment on that release warns
+      # about. Set here so both operator modes read the same variable.
+      #
+      # `app.image` is a FLAT STRING in this subchart (the template renders
+      # `image: {{ "{{" }} .Values.app.image }}`), not the usual repository/tag map. Setting
+      # `.app.image.tag` would pass the subchart's values.schema.json — it declares only
+      # watchNamespaces and does not forbid extra keys — and then render
+      # `image: map[tag:nightly]`, which fails at pull time rather than at template time.
+      # Override the whole reference. Note the key was a bare `image` up to 3.2.0-beta1 and
+      # moved under `app` in the 3.7.0 line; a stale `debezium-operator.image` here would be
+      # silently ignored rather than rejected.
+      - name: debezium-operator.app.image
+        value: quay.io/debezium/operator:{{ env "DPL_DEBEZIUM_OPERATOR_TAG" | default "nightly" }}
+      # The operator image ships the Quarkus OpenTelemetry extension ENABLED and exports its
+      # OWN metrics — JVM, reconcile counts — independently of the pipeline metrics that
+      # monitoring.otel.enabled configures on conductor. The chart's default endpoint is the
+      # placeholder `http://otel-collector:4317`, which resolves nowhere here, so a
+      # PeriodicMetricReader failed every 60s for the life of the pod and that telemetry was
+      # dropped on the floor. Point it at the collector the platform already runs.
+      #
+      # Port 4317, not conductor's 4318: this chart sets no protocol variable, so the exporter
+      # stays on its Quarkus default of OTLP/gRPC. The collector's CR enables both receivers.
+      # 3.2.0-beta1 had no env values at all — the endpoint could not be configured through
+      # Helm, only by patching the Deployment — which is the main reason the subchart pin
+      # above moved to the 3.7.0 line rather than staying on the beta.
+      - name: debezium-operator.app.envs.QUARKUS_OTEL_EXPORTER_OTLP_ENDPOINT
+        value: http://debezium-platform-otel-collector-collector.{{ env "DPL_NAMESPACE" | default "dmp" }}.svc.cluster.local:4317
