@@ -9,6 +9,7 @@
 {{- $env    := env "DPL_ENV" | default "local" }}
 {{- $local  := eq $env "local" }}
 {{- $public := eq $env "public" }}
+{{- $ocp := eq $env "ocp" }}
 {{- $operatorMode    := env "DPL_OPERATOR_MODE" | default "bundled" }}
 {{- $bundledOperator := eq $operatorMode "bundled" }}
 {{- $postgres     := dig "components" "postgres"      false $v }}
@@ -226,7 +227,7 @@ releases:
     namespace: databases
     createNamespace: true
     chart: cloudnative-pg/cloudnative-pg
-    installed: {{ or $postgres $sso }}
+    installed: {{ and (or $postgres $sso) (not $ocp) }}
     labels:
       app: cnpg-operator
       component: postgres-operator
@@ -243,8 +244,14 @@ releases:
       infra: "true"
     values:
       - values/postgresql/{{ $env }}.yaml
+    set:
+      - name: image
+        value: '{{ requiredEnv "DPL_POSTGRESQL_IMAGE" }}'
+    {{- if not $ocp }}
+    # On OpenShift the operator comes from OperatorHub, not this helmfile.
     needs:
       - databases/cnpg-operator
+    {{- end }}
 
   - name: mongodb-community-operator
     namespace: databases

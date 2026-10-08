@@ -51,7 +51,7 @@ metadata:
     app.kubernetes.io/managed-by: {{ .Release.Service }}
 spec:
   instances: 1
-  imageName: ghcr.io/cloudnative-pg/postgresql:16
+  imageName: {{ .Values.image }}
 
   # No superuserSecret: with enableSuperuserAccess on and no secret named, CNPG
   # generates a random password and owns the `postgresql-superuser` Secret itself
@@ -72,12 +72,6 @@ spec:
       secret:
         name: postgresql-app-owner
 
-  postgresql:
-    parameters:
-      wal_level: logical
-      max_replication_slots: "4"
-      max_wal_senders: "4"
-
   managed:
     roles:
       - name: debezium
@@ -96,7 +90,9 @@ spec:
 
   storage:
     size: 10Gi
-    storageClass: {{ .Values.storage.storageClass | default "local-path" }}
+    {{- with .Values.storage.storageClass }}
+    storageClass: {{ . }}
+    {{- end }}
 
   monitoring:
     enablePodMonitor: false

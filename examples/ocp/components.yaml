@@ -1,0 +1,16 @@
+components:
+  # The demo CNPG cluster in `databases` (ecommerce DB, debezium + apicurio roles).
+  # It also pulls in cnpg-operator — which `sso` needs anyway for keycloak-db, so the
+  # two flags share it and the operator is installed exactly once either way.
+  postgres: true
+  kafka: false
+  # mendhak/http-https-echo in `tools` — a sink that accepts any POST and echoes it
+  # back, so an HTTP destination can be demoed without standing up a real consumer.
+  http-server: false
+  kafka-ui: false
+  sso: false
+  # My registrar. Installs the Gandi DNS-01 webhook plus the letsencrypt-prod
+  # ClusterIssuer. If your DNS is elsewhere, set this false and create your own
+  # ClusterIssuer named letsencrypt-prod — cert-manager has built-in solvers for
+  # Cloudflare, Route53, CloudDNS and others, which need no webhook at all.
+  dns01-gandi: false

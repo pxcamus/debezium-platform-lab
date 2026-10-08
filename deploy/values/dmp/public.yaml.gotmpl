@@ -32,7 +32,7 @@ conductor:
     # while the UI still loads, because the stage SPA shell needs no token. Mapper first,
     # then this. Note the two audience fields on that mapper are a fallback chain, not a
     # pair: a populated "Included Client Audience" makes the custom one dead config.
-    audience: conductor
+    audience: ""
 # Read the bearer from X-Forwarded-Access-Token instead of Authorization. oauth2-proxy puts
 # the ACCESS token there (pass_access_token) and the ID token in Authorization
 # (pass_authorization_header, hardcoded to the id_token claim). The access token is the one
