@@ -419,8 +419,11 @@ releases:
       app: keycloak-db
       component: identity
       infra: "true"
+    {{- if not $ocp }}
+    # On OpenShift the operator comes from OperatorHub, not this helmfile.
     needs:
       - databases/cnpg-operator
+    {{- end }}
 
   - name: keycloak
     namespace: identity
