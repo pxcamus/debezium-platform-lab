@@ -348,7 +348,7 @@ releases:
     createNamespace: true
     chart: prometheus-community/kube-prometheus-stack
     version: '{{ requiredEnv "DPL_KUBE_PROMETHEUS_STACK_VERSION" }}'
-    installed: true
+    installed: {{ not $ocp }}
     missingFileHandler: Warn
     timeout: 600
     labels:

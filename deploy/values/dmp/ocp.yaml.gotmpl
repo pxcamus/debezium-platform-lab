@@ -1,11 +1,43 @@
+# Debezium Platform on OpenShift (CRC or SNO), DPL_ENV=ocp.
+#
+# What is different from local/public:
+#   - No bundled Postgres. The chart's database subchart runs quay.io/debezium/postgres
+#     as root, which restricted-v2 rejects. The conductor DB is a CloudNativePG cluster
+#     named conductor-db (operator from OperatorHub), reached through its -rw Service
+#     and the -app Secret CNPG creates (keys: username, password).
+#   - Ingress with no class. OpenShift's router admits classless Ingress objects and
+#     creates a Route for them. Plain HTTP on CRC (DPL_DOMAIN=apps-crc.testing).
+#   - Monitoring uses what OpenShift already has: User Workload Monitoring scrapes the
+#     ServiceMonitor (no release label needed), and the Red Hat build of OpenTelemetry
+#     from OperatorHub reconciles the OpenTelemetryCollector. The helmfile releases for
+#     kube-prometheus-stack and opentelemetry-operator are gated off on ocp.
 domain:
   name: dmp.{{ requiredEnv "DPL_DOMAIN" }}
+database:
+  enabled: false
+  host: conductor-db-rw
+  name: conductor
+  auth:
+    existingSecret: conductor-db-app
+stage:
+  image: image-registry.openshift-image-registry.svc:5000/dmp/platform-stage:3.7.0-SNAPSHOT-sno-1110261025
+  imagePullPolicy: Always
 monitoring:
   otel:
-    enabled: true
+    enabled: false
     collector:
+      # Empty: the Red Hat operator injects its own collector image, which ships the
+      # prometheus exporter. Pinning the upstream ghcr image here is not needed.
       image: ""
+      # The Red Hat image has no `nop` exporter, so the logs and traces pipelines the
+      # template renders by default make the collector refuse its config. Metrics only.
+      metricsOnly: true
   prometheus:
+    # Conductor's in-UI panels query this URL unauthenticated. OpenShift's user-workload
+    # Prometheus sits behind kube-rbac-proxy (token required), so the panels will not
+    # render on this profile yet. Metrics are still visible in the console (Observe >
+    # Metrics). Open item; see docs.
     url: "http://prometheus-user-workload.openshift-user-workload-monitoring.svc:9090"
     serviceMonitor:
       enabled: true
+      labels: {}
