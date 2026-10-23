@@ -1,0 +1,11 @@
+domain:
+  name: dmp.{{ requiredEnv "DPL_DOMAIN" }}
+monitoring:
+  otel:
+    enabled: true
+    collector:
+      image: ""
+  prometheus:
+    url: "http://prometheus-user-workload.openshift-user-workload-monitoring.svc:9090"
+    serviceMonitor:
+      enabled: true

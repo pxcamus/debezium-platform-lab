@@ -301,6 +301,26 @@ releases:
     values:
       - values/http-server/{{ $env }}.yaml
 
+  # The CDC dashboard over the demo `ecommerce` database. Published OCI chart from
+  # pxcamus/oneint-dbz-cdc-app, pulled by reference — no repositories: entry needed.
+  # The chart pins its own image tag from DPL_CDC_VERSION, so nothing here names an
+  # image. Supersedes the unwired charts/cdc-dashboard copy, which pointed at a
+  # locally built image.
+  - name: cdc-dashboard
+    namespace: tools
+    createNamespace: true
+    chart: oci://ghcr.io/pxcamus/charts/cdc
+    version: '{{ requiredEnv "DPL_CDC_VERSION" }}'
+    installed: {{ $cdcDashboard }}
+    labels:
+      app: cdc-dashboard
+      component: workload
+    values:
+      - values/cdc-dashboard/{{ $env }}.yaml
+    # Connects as app_owner to the ecommerce database the CNPG cluster bootstraps.
+    needs:
+      - databases/postgresql-cluster
+
   - name: apicurio-registry
     namespace: apicurio
     createNamespace: true
@@ -361,7 +381,7 @@ releases:
     createNamespace: true
     chart: open-telemetry/opentelemetry-operator
     version: '{{ requiredEnv "DPL_OTEL_OPERATOR_VERSION" }}'
-    installed: true
+    installed: {{ not $ocp }}
     labels:
       app: opentelemetry-operator
       component: monitoring
@@ -524,9 +544,11 @@ releases:
     # ../debezium-platform/helm when that lands upstream, then switch back to the repo
     # chart + DPL_DEBEZIUM_VERSION. Local path ⇒ no version pin (Chart.yaml is 0.0.1).
     chart: ./charts/debezium-platform
+    {{- if not $ocp }}
     needs:
       - monitoring/kube-prometheus-stack
       - monitoring/opentelemetry-operator
+    {{- end}}
     labels:
       app: debezium-platform
       component: platform

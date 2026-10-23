@@ -6,7 +6,10 @@ components:
   kafka: false
   # mendhak/http-https-echo in `tools` — a sink that accepts any POST and echoes it
   # back, so an HTTP destination can be demoed without standing up a real consumer.
-  http-server: false
+  http-server: true
+  # The CDC dashboard (pxcamus/oneint-dbz-cdc-app, mode serve) over the ecommerce DB
+  # in `tools`. Published OCI chart; version pinned by DPL_CDC_VERSION.
+  cdc-dashboard: true
   kafka-ui: false
   sso: false
   # My registrar. Installs the Gandi DNS-01 webhook plus the letsencrypt-prod

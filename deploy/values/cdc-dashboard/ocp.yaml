@@ -1,0 +1,29 @@
+# CDC dashboard on OpenShift (CRC, SNO or a full cluster).
+#
+# `serve` is the long-running HTMX dashboard over the demo `ecommerce` database,
+# rendered as a Deployment + Service. The same chart installs doctor/provision/load
+# as one-shot Jobs under other release names; only the dashboard lives here.
+mode: serve
+
+# Postgres only: the demo CNPG cluster in `databases`, as `app_owner`, the initdb
+# owner of `ecommerce` (see charts/postgresql-cluster). Fixed lab credentials like
+# the rest of the tree. The chart enables a backend only when its URI is set, so
+# mongodb and mssql stay off.
+postgres:
+  uri: postgres://app_owner:app_owner@postgresql-rw.databases.svc.cluster.local:5432/ecommerce?sslmode=disable
+  schema: public
+
+# The chart hardcodes uid/gid 65532 (distroless "nonroot"). OpenShift's restricted-v2
+# SCC assigns a uid from the project's range and rejects a pod that asks for a fixed
+# one outside it. `null` deletes the keys from the merged values; runAsNonRoot and
+# the seccomp profile stay. The image is a static binary with a read-only root
+# filesystem, so it runs as any uid.
+podSecurityContext:
+  runAsUser: null
+  runAsGroup: null
+
+# ClusterIP, no Ingress yet. Reach it with
+#   oc -n tools port-forward svc/cdc-dashboard 8480:8480
+# A Route is the next step.
+service:
+  type: ClusterIP
