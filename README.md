@@ -3,6 +3,7 @@
 Reproducible, environment-agnostic automation for running the [Debezium Platform](https://debezium.io/documentation/reference/stable/operations/debezium-platform.html) on Kubernetes — the same [**helm**](https://helm.sh/) charts and [**helmfile**](https://helmfile.readthedocs.io/) releases take you from a local [Kind](https://kind.sigs.k8s.io/) cluster to AWS or a self-hosted k3s box.
 
 [![Helm validation](https://github.com/pxcamus/debezium-platform-lab/actions/workflows/helm-validation.yaml/badge.svg)](https://github.com/pxcamus/debezium-platform-lab/actions/workflows/helm-validation.yaml)
+[![Security scan](https://github.com/pxcamus/debezium-platform-lab/actions/workflows/security-scan.yaml/badge.svg?branch=main)](https://github.com/pxcamus/debezium-platform-lab/actions/workflows/security-scan.yaml)
 
 > A community project. Not affiliated with, or endorsed by, the Debezium project or Red Hat.
 

@@ -44,10 +44,6 @@ jobs:
         with:
           version: v4.2.3
 
-      - name: Install helm-unittest plugin
-        if: steps.changes.outputs.deploy == 'true'
-        run: helm plugin install https://github.com/helm-unittest/helm-unittest.git --verify=false
-
       - name: Install Helmfile
         if: steps.changes.outputs.deploy == 'true'
         uses: helmfile/helmfile-action@v2

@@ -1,0 +1,68 @@
+name: Security scan
+
+# Trivy misconfiguration scan of the rendered charts (scripts/security-scan.sh).
+#
+# Fails on HIGH or CRITICAL findings in the charts this repository owns, unless
+# .trivyignore.yaml accepts them with a reason. Third-party charts are reported in the
+# job log and never fail the run.
+#
+# Also runs once a week on its own: Trivy's checks are updated upstream, so a chart
+# nobody touched can acquire a finding.
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  schedule:
+    - cron: "17 5 * * 1"
+  workflow_dispatch:
+
+# Read-only. The scan reports through the job log and its exit status.
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Pinned, with the checksum of the release archive. Bump both together: the checksum
+  # is in trivy_<version>_checksums.txt on the release page.
+  TRIVY_VERSION: 0.76.1
+  TRIVY_SHA256: c7cbe3137fb8a48a17574bede3dd6beb16742d1e9772929940fc90082c39d9c0
+
+jobs:
+  trivy:
+    name: Trivy misconfiguration scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v4.2.3
+
+      - name: Install Helmfile
+        uses: helmfile/helmfile-action@v2
+        with:
+          helmfile-version: v1.7.1
+          helm-version: v4.2.3
+          helmfile-args: ''
+
+      - name: Install Trivy
+        run: |
+          set -euo pipefail
+          archive="trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+          curl -fsSL -o "/tmp/${archive}" \
+            "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/${archive}"
+          echo "${TRIVY_SHA256}  /tmp/${archive}" | sha256sum --check --strict
+          tar -xz -C /tmp -f "/tmp/${archive}" trivy
+          sudo install -m 0755 /tmp/trivy /usr/local/bin/trivy
+          trivy --version
+
+      - name: Scan the rendered charts
+        run: ./scripts/security-scan.sh --report
