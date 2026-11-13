@@ -144,6 +144,7 @@ assert_single_operator standalone
 helmfile_envs=(
   local
   public
+  ocp
 )
 
 template_helmfile_env() {
@@ -172,3 +173,28 @@ echo "==> Helmfile template environments"
 for env in "${helmfile_envs[@]}"; do
   template_helmfile_env "${env}"
 done
+
+# --- Example component selections -------------------------------------------
+#
+# The renders above use no components, so a release that only exists behind a
+# component flag is never templated by them. An example is a promise that a given
+# profile and component selection works together; render it so it stays true.
+#
+# The path is absolute on purpose: helmfile resolves --state-values-file relative to
+# the helmfile's own directory (deploy/), not to where it is run from.
+
+template_example() {
+  local env="$1" components="$2"
+
+  echo "Rendering ${components} with DPL_ENV=${env}"
+
+  DPL_ENV="${env}" "${HELMFILE[@]}" template \
+      --state-values-file "$(pwd)/${components}" \
+    | kubeconform \
+        -schema-location default \
+        -ignore-missing-schemas \
+        -summary
+}
+
+echo "==> Example component selections"
+template_example ocp examples/ocp/components.yaml

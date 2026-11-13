@@ -1,0 +1,13 @@
+components:
+  # The demo CloudNativePG cluster in `databases` (ecommerce DB, debezium + apicurio
+  # roles). The operator itself comes from OperatorHub on this profile.
+  postgres: true
+  # mendhak/http-https-echo in `tools` — a sink that accepts any POST and echoes it
+  # back, so an HTTP destination can be demoed without standing up a real consumer.
+  http-server: true
+  # The CDC dashboard (pxcamus/oneint-dbz-cdc-app, mode serve) over the ecommerce DB
+  # in `tools`. Published OCI chart; version pinned by DPL_CDC_VERSION.
+  cdc-dashboard: true
+  # Not exercised on OpenShift yet.
+  kafka: false
+  kafka-ui: false

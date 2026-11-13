@@ -72,11 +72,9 @@ spec:
       secret:
         name: postgresql-app-owner
 
-  postgresql:
-    parameters:
-      wal_level: logical
-      max_replication_slots: "4"
-      max_wal_senders: "4"
+  # No postgresql.parameters: CloudNativePG already sets wal_level=logical, which is
+  # what Debezium needs, and its defaults for replication slots and WAL senders are
+  # higher than the 4 this chart used to force.
 
   managed:
     roles:
@@ -96,7 +94,10 @@ spec:
 
   storage:
     size: 10Gi
-    storageClass: {{ .Values.storage.storageClass | default "local-path" }}
+    # Empty means "omit the field", so the claim takes the cluster's default class.
+    {{- with .Values.storage.storageClass }}
+    storageClass: {{ . }}
+    {{- end }}
 
   monitoring:
     enablePodMonitor: false

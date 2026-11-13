@@ -1,0 +1,35 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  # Fixed, not derived from the release: values/dmp/ocp.yaml.gotmpl addresses the
+  # `conductor-db-rw` Service and the `conductor-db-app` Secret by name.
+  name: conductor-db
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: conductor-db
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  instances: {{ .Values.instances }}
+  {{- with .Values.imageName }}
+  imageName: {{ . }}
+  {{- end }}
+
+  bootstrap:
+    initdb:
+      database: {{ .Values.database }}
+      owner: {{ .Values.username }}
+      # The conductor runs change data capture on its OWN database: state changes are
+      # written to an outbox table and an embedded connector tails the WAL. That needs
+      # a replication connection, and initdb creates the owner without the attribute.
+      postInitApplicationSQL:
+        - ALTER ROLE {{ .Values.username }} WITH REPLICATION
+
+  storage:
+    size: {{ .Values.storage.size }}
+    {{- with .Values.storage.storageClass }}
+    storageClass: {{ . }}
+    {{- end }}
+
+  monitoring:
+    enablePodMonitor: false

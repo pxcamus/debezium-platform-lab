@@ -161,3 +161,11 @@ platform-sso *args:
 [group('helmfile')]
 platform-sso-releases:
     just releases --state-values-file {{ justfile_directory() }}/examples/k3s/platform-sso/components.yaml
+
+[group('helmfile')]
+ocp *args:
+    just apply --state-values-file {{ justfile_directory() }}/examples/ocp/components.yaml {{ args }}
+
+[group('helmfile')]
+ocp-releases:
+    just releases --state-values-file {{ justfile_directory() }}/examples/ocp/components.yaml
