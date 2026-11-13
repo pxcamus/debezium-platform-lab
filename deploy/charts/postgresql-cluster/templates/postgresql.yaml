@@ -51,7 +51,7 @@ metadata:
     app.kubernetes.io/managed-by: {{ .Release.Service }}
 spec:
   instances: 1
-  imageName: ghcr.io/cloudnative-pg/postgresql:16
+  imageName: {{ required "image is required — the helmfile sets it from DPL_POSTGRESQL_IMAGE" .Values.image }}
 
   # No superuserSecret: with enableSuperuserAccess on and no secret named, CNPG
   # generates a random password and owns the `postgresql-superuser` Secret itself

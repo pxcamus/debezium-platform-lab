@@ -243,6 +243,9 @@ releases:
       infra: "true"
     values:
       - values/postgresql/{{ $env }}.yaml
+    set:
+      - name: image
+        value: '{{ requiredEnv "DPL_POSTGRESQL_IMAGE" }}'
     needs:
       - databases/cnpg-operator
 
@@ -508,12 +511,11 @@ releases:
   - name: debezium-platform
     namespace: '{{ env "DPL_NAMESPACE" | default "dmp" }}'
     createNamespace: true
-    # Vendored from the debezium-platform repo's helm/ (branch build) rather than the
-    # published debezium/debezium-platform chart, because it carries the conductor.oidc
-    # block the SSO demo needs (not yet in the released chart). Re-sync from
-    # ../debezium-platform/helm when that lands upstream, then switch back to the repo
-    # chart + DPL_DEBEZIUM_VERSION. Local path ⇒ no version pin (Chart.yaml is 0.0.1).
-    chart: ./charts/debezium-platform
+    # The published chart, pinned by DPL_DEBEZIUM_VERSION. A vendored copy lived under
+    # charts/debezium-platform while the conductor.oidc block the SSO demo needs was not
+    # in a release; 3.8.0-alpha1 has it, so the copy is gone.
+    chart: debezium/debezium-platform
+    version: '{{ requiredEnv "DPL_DEBEZIUM_VERSION" }}'
     needs:
       - monitoring/kube-prometheus-stack
       - monitoring/opentelemetry-operator
