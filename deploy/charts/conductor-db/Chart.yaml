@@ -1,0 +1,10 @@
+apiVersion: v2
+name: conductor-db
+description: >-
+  Dedicated CloudNativePG PostgreSQL cluster backing the Debezium Platform conductor.
+  Used on OpenShift in place of the `database` subchart bundled with
+  debezium-platform, which runs as root. Requires the CloudNativePG operator to
+  already be installed.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

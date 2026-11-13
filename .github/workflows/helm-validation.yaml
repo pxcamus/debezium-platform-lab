@@ -30,6 +30,7 @@ jobs:
               - "deploy/values/**"
               - "deploy/environment/**"
               - "deploy/helmfile.yaml.gotmpl"
+              - "examples/**"
               - ".github/workflows/helm-validation.yaml"
               - "scripts/validate-helm.sh"
 

@@ -154,7 +154,8 @@ wrong when run from a workstation rather than in-cluster. The exhaustive list is
 | `DPL_DMP_RESOURCE_PREFIX` / `DPL_DMP_ENVIRONMENT` | Resource naming prefix | used in JSON payloads |
 | `DPL_DMP_KAFKA_BOOTSTRAP_SERVERS` | Kafka bootstrap servers | used in JSON payloads |
 
-Known `DPL_ENV` values: `local`, `homelab`, `aws`, `hetzner`.
+Known `DPL_ENV` values: `local` (Kind), `public` (k3s with a real domain and TLS), `ocp`
+(OpenShift Local; experimental, see `examples/ocp/README.md`).
 
 ### JSON payload environment expansion
 

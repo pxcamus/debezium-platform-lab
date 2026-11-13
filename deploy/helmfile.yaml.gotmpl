@@ -9,6 +9,9 @@
 {{- $env    := env "DPL_ENV" | default "local" }}
 {{- $local  := eq $env "local" }}
 {{- $public := eq $env "public" }}
+{{- /* OpenShift Local (crc). The cluster already provides a router, monitoring and
+       OperatorHub, so the releases that install those elsewhere are gated off. */ -}}
+{{- $ocp    := eq $env "ocp" }}
 {{- $operatorMode    := env "DPL_OPERATOR_MODE" | default "bundled" }}
 {{- $bundledOperator := eq $operatorMode "bundled" }}
 {{- $postgres     := dig "components" "postgres"      false $v }}
@@ -229,7 +232,8 @@ releases:
     namespace: databases
     createNamespace: true
     chart: cloudnative-pg/cloudnative-pg
-    installed: {{ or $postgres $sso }}
+    # Not on OpenShift: the operator is installed once from OperatorHub instead.
+    installed: {{ and (or $postgres $sso) (not $ocp) }}
     labels:
       app: cnpg-operator
       component: postgres-operator
@@ -249,8 +253,10 @@ releases:
     set:
       - name: image
         value: '{{ requiredEnv "DPL_POSTGRESQL_IMAGE" }}'
+    {{- if not $ocp }}
     needs:
       - databases/cnpg-operator
+    {{- end }}
 
   - name: mongodb-community-operator
     namespace: databases
@@ -315,6 +321,9 @@ releases:
       component: workload
     values:
       - values/cdc-dashboard/values.yaml
+      {{- if $ocp }}
+      - values/cdc-dashboard/ocp.yaml
+      {{- end }}
     # Connects as app_owner to the ecommerce database the CNPG cluster bootstraps.
     needs:
       - databases/postgresql-cluster
@@ -346,7 +355,8 @@ releases:
     createNamespace: true
     chart: prometheus-community/kube-prometheus-stack
     version: '{{ requiredEnv "DPL_KUBE_PROMETHEUS_STACK_VERSION" }}'
-    installed: true
+    # Not on OpenShift: user workload monitoring scrapes the platform instead.
+    installed: {{ not $ocp }}
     missingFileHandler: Warn
     timeout: 600
     labels:
@@ -379,7 +389,8 @@ releases:
     createNamespace: true
     chart: open-telemetry/opentelemetry-operator
     version: '{{ requiredEnv "DPL_OTEL_OPERATOR_VERSION" }}'
-    installed: true
+    # Not on OpenShift: the Red Hat build of OpenTelemetry comes from OperatorHub.
+    installed: {{ not $ocp }}
     labels:
       app: opentelemetry-operator
       component: monitoring
@@ -530,6 +541,21 @@ releases:
       - name: image
         value: quay.io/debezium/operator:{{ env "DPL_DEBEZIUM_OPERATOR_TAG" | default "nightly" }}
 
+  # The conductor's own database on OpenShift, as a CloudNativePG cluster. The platform
+  # chart's bundled database runs as root, which the restricted-v2 SCC rejects, so
+  # values/dmp/ocp.yaml.gotmpl switches it off and points the conductor here.
+  # CloudNativePG is not a Helm-tracked workload, so `wait` returns as soon as the
+  # Cluster object exists; the conductor retries until the database answers.
+  - name: conductor-db
+    namespace: '{{ env "DPL_NAMESPACE" | default "dmp" }}'
+    createNamespace: true
+    chart: ./charts/conductor-db
+    installed: {{ $ocp }}
+    labels:
+      app: conductor-db
+      component: platform
+      infra: "true"
+
   - name: debezium-platform
     namespace: '{{ env "DPL_NAMESPACE" | default "dmp" }}'
     createNamespace: true
@@ -539,8 +565,12 @@ releases:
     chart: debezium/debezium-platform
     version: '{{ requiredEnv "DPL_DEBEZIUM_VERSION" }}'
     needs:
+      {{- if $ocp }}
+      - '{{ env "DPL_NAMESPACE" | default "dmp" }}/conductor-db'
+      {{- else }}
       - monitoring/kube-prometheus-stack
       - monitoring/opentelemetry-operator
+      {{- end }}
     labels:
       app: debezium-platform
       component: platform

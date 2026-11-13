@@ -1,0 +1,17 @@
+# CloudNativePG Postgres for the conductor's platform database.
+#
+# No password here. No Secret is named in the Cluster, so CloudNativePG generates the
+# owner's password and writes it to the `conductor-db-app` Secret (keys: username,
+# password). values/dmp/ocp.yaml.gotmpl hands that Secret to the platform chart.
+database: conductor
+username: conductor
+
+instances: 1
+
+# Empty means the operator's default PostgreSQL image.
+imageName: ""
+
+storage:
+  size: 15Gi
+  # Empty means the cluster's default StorageClass.
+  storageClass: ""

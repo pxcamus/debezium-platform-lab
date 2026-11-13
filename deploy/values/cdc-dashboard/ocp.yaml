@@ -1,0 +1,10 @@
+# OpenShift overlay, layered on values.yaml when DPL_ENV=ocp.
+#
+# The chart hardcodes uid/gid 65532 (distroless "nonroot"). OpenShift's restricted-v2
+# SCC assigns a uid from the project's range and rejects a pod that asks for a fixed
+# one outside it. `null` deletes the keys from the merged values; runAsNonRoot and
+# the seccomp profile stay. The image is a static binary with a read-only root
+# filesystem, so it runs as any uid.
+podSecurityContext:
+  runAsUser: null
+  runAsGroup: null

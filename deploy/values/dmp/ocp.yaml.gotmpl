@@ -1,0 +1,56 @@
+# Debezium Platform on OpenShift Local (crc), DPL_ENV=ocp.
+#
+# What is different from local/public:
+#   - No bundled Postgres. The chart's database subchart runs quay.io/debezium/postgres
+#     as root, which restricted-v2 rejects. The conductor DB is the CloudNativePG cluster
+#     from charts/conductor-db (operator from OperatorHub), reached through its -rw
+#     Service and the -app Secret CloudNativePG creates (keys: username, password).
+#   - Ingress with no class. OpenShift's router admits classless Ingress objects and
+#     creates a Route for them. Plain HTTP on crc (DPL_DOMAIN=apps-crc.testing).
+#   - Monitoring uses what OpenShift already has: user workload monitoring scrapes the
+#     ServiceMonitor, and the Red Hat build of OpenTelemetry from OperatorHub reconciles
+#     the OpenTelemetryCollector. The helmfile releases for kube-prometheus-stack and
+#     opentelemetry-operator are gated off on ocp.
+domain:
+  name: dmp.{{ requiredEnv "DPL_DOMAIN" }}
+database:
+  enabled: false
+  host: conductor-db-rw
+  name: conductor
+  auth:
+    existingSecret: conductor-db-app
+stage:
+  imagePullPolicy: Always
+conductor:
+  imagePullPolicy: Always
+# Image for the Debezium Server pods the conductor creates per pipeline. Empty means the
+# operator's default, quay.io/debezium/server:nightly. Pinned to a release because the
+# 3.8.0-SNAPSHOT nightly (2026-11-09) dies at startup when JMX_EXPORTER_PORT is set:
+# IllegalAccessError in jmx_prometheus_javaagent 1.0.1 against prometheus-metrics 1.5.1,
+# and the conductor always enables the JMX exporter. Pipelines pick the image up on
+# their next create or update.
+# Remove once https://github.com/debezium/dbz/issues/3043 is fixed in the nightly.
+server:
+  image: quay.io/debezium/server:3.7.1.Final
+monitoring:
+  otel:
+    enabled: true
+    collector:
+      # The Red Hat operator's default collector image has no `nop` exporter, which the
+      # chart's logs/traces pipelines use, so the collector refuses its config. The
+      # upstream core distribution ships nop + prometheus.
+      # Remove once https://github.com/debezium/dbz/issues/3042 is fixed in the chart.
+      image: ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector:0.165.0
+  prometheus:
+    # KNOWN LIMITATION: the conductor's in-UI monitoring panels do not render on this
+    # profile. They query this URL with a plain, unauthenticated HTTP client, and
+    # OpenShift only serves user-workload metrics behind kube-rbac-proxy (TLS + bearer
+    # token), which the conductor cannot speak yet. The chart requires a URL whenever
+    # monitoring.otel is enabled, so this is the cluster's real query endpoint: every
+    # panel query is refused today, and it is the right address once
+    # https://github.com/debezium/dbz/issues/3049 lands.
+    # The metrics themselves are collected: user workload monitoring scrapes the
+    # ServiceMonitor below, so they are in the console under Observe > Metrics.
+    url: "https://thanos-querier.openshift-monitoring.svc:9091"
+    serviceMonitor:
+      enabled: true
