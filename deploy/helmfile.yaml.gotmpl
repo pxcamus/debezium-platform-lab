@@ -543,7 +543,8 @@ releases:
     # block the SSO demo needs (not yet in the released chart). Re-sync from
     # ../debezium-platform/helm when that lands upstream, then switch back to the repo
     # chart + DPL_DEBEZIUM_VERSION. Local path ⇒ no version pin (Chart.yaml is 0.0.1).
-    chart: ./charts/debezium-platform
+    chart: debezium/debezium-platform
+    version: '{{ requiredEnv "DPL_DEBEZIUM_VERSION" }}'
     {{- if not $ocp }}
     needs:
       - monitoring/kube-prometheus-stack

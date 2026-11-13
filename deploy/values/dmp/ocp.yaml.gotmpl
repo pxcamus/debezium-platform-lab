@@ -20,24 +20,35 @@ database:
   auth:
     existingSecret: conductor-db-app
 stage:
-  image: image-registry.openshift-image-registry.svc:5000/dmp/platform-stage:3.7.0-SNAPSHOT-sno-1110261025
   imagePullPolicy: Always
+conductor:
+  imagePullPolicy: Always
+# Image for the Debezium Server pods the conductor creates per pipeline. Empty means the
+# operator's default, quay.io/debezium/server:nightly. Pinned to a release because the
+# 3.8.0-SNAPSHOT nightly (2026-11-09) dies at startup when JMX_EXPORTER_PORT is set:
+# IllegalAccessError in jmx_prometheus_javaagent 1.0.1 against prometheus-metrics 1.5.1,
+# and the conductor always enables the JMX exporter. Remove once the nightly bumps the
+# agent. Pipelines pick the image up on their next create or update.
+server:
+  image: quay.io/debezium/server:3.7.1.Final
 monitoring:
   otel:
-    enabled: false
+    enabled: true
     collector:
-      # Empty: the Red Hat operator injects its own collector image, which ships the
-      # prometheus exporter. Pinning the upstream ghcr image here is not needed.
-      image: ""
-      # The Red Hat image has no `nop` exporter, so the logs and traces pipelines the
-      # template renders by default make the collector refuse its config. Metrics only.
-      metricsOnly: true
+      # The Red Hat operator's default collector image has no `nop` exporter, which the
+      # chart's logs/traces pipelines use, so the collector refuses its config. The
+      # upstream core distribution ships nop + prometheus. Remove once
+      # <your dbz issue> is fixed in the chart.
+      image: ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector:0.165.0
   prometheus:
-    # Conductor's in-UI panels query this URL unauthenticated. OpenShift's user-workload
-    # Prometheus sits behind kube-rbac-proxy (token required), so the panels will not
-    # render on this profile yet. Metrics are still visible in the console (Observe >
-    # Metrics). Open item; see docs.
-    url: "http://prometheus-user-workload.openshift-user-workload-monitoring.svc:9090"
+    # Conductor's in-UI panels query this URL with a plain, unauthenticated HTTP client.
+    # OpenShift's user-workload Prometheus only listens on 127.0.0.1:9090 in its pod and is
+    # exposed on 9091 behind kube-rbac-proxy (TLS + token), which the conductor cannot use.
+    # So the panels read from a small plain-HTTP Prometheus in the dmp namespace that scrapes
+    # the OTel collector (manifest: deploy/manifests/ocp/dmp-prometheus.yaml, applied by
+    # hand with oc apply). Metrics still reach the cluster Prometheus via the ServiceMonitor.
+    # Remove once the conductor supports bearer-token/TLS (feature request upstream).
+    url: "http://dmp-prometheus.dmp.svc:9090"
     serviceMonitor:
       enabled: true
       labels: {}

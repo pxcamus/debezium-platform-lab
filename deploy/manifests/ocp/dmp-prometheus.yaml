@@ -1,0 +1,83 @@
+# Plain-HTTP Prometheus for the DMP conductor's monitoring panels on OpenShift.
+#
+# Why: the conductor queries Prometheus with an unauthenticated HTTP client
+# (MONITORING_PROMETHEUS_URL). OpenShift's user-workload Prometheus only listens on
+# 127.0.0.1:9090 inside its pod and is exposed through kube-rbac-proxy on 9091 (TLS +
+# bearer token), which the conductor cannot speak. This small Prometheus scrapes the DMP
+# OTel collector directly and answers plain HTTP on 9090 inside the dmp namespace.
+# Metrics keep flowing to the cluster's own Prometheus too (ServiceMonitor); this one only
+# serves the UI panels. Short retention, no persistence: it is a view, not a store.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dmp-prometheus
+  namespace: dmp
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+    scrape_configs:
+      - job_name: debezium-platform-otel-collector
+        honor_labels: true
+        static_configs:
+          - targets: ["debezium-platform-otel-collector-collector.dmp.svc:8889"]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dmp-prometheus
+  namespace: dmp
+  labels:
+    app.kubernetes.io/name: dmp-prometheus
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: dmp-prometheus
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: dmp-prometheus
+    spec:
+      containers:
+        - name: prometheus
+          image: quay.io/prometheus/prometheus:v3.5.0
+          args:
+            - --config.file=/etc/prometheus/prometheus.yml
+            - --storage.tsdb.path=/prometheus
+            - --storage.tsdb.retention.time=2d
+            - --web.listen-address=0.0.0.0:9090
+          ports:
+            - name: web
+              containerPort: 9090
+          readinessProbe:
+            httpGet:
+              path: /-/ready
+              port: web
+          volumeMounts:
+            - name: config
+              mountPath: /etc/prometheus
+            - name: data
+              mountPath: /prometheus
+          resources:
+            requests: { cpu: 50m, memory: 128Mi }
+            limits: { memory: 512Mi }
+      volumes:
+        - name: config
+          configMap:
+            name: dmp-prometheus
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dmp-prometheus
+  namespace: dmp
+spec:
+  selector:
+    app.kubernetes.io/name: dmp-prometheus
+  ports:
+    - name: web
+      port: 9090
+      targetPort: web
