@@ -22,6 +22,7 @@ just hf <args>        # raw helmfile passthrough: template, diff, destroy, --sel
 
 scripts/validate-helm.sh   # lint, gating assertions, render every environment (no cluster)
 scripts/validate-env.sh    # env-var consistency between .env.example and the payloads
+scripts/security-scan.sh   # Trivy misconfiguration scan of the rendered charts (no cluster)
 ```
 
 `just apply` always passes `--skip-diff-on-install`. This is deliberate and should not be made
@@ -32,13 +33,18 @@ time; existing releases still diff normally.
 
 `scripts/with-env.sh` fronts a single command with the same environment, for use outside `just`.
 
-CI is three GitHub Actions workflows:
+CI is five GitHub Actions workflows:
 
 | Workflow | Runs |
 |---|---|
 | `toolchain.yaml` | shellcheck, `bash -n`, `just --fmt --check`, `just --list`, `validate-env.sh` — always |
 | `helm-validation.yaml` | `scripts/validate-helm.sh` — on changes under `deploy/` |
+| `security-scan.yaml` | `scripts/security-scan.sh --report` — every PR, `main`, and weekly. Fails on HIGH/CRITICAL in the charts under `deploy/charts/` unless accepted in `.trivyignore.yaml` with a reason; third-party charts are reported only |
+| `secrets.yaml` | gitleaks over the commits a PR adds |
 | `docs.yaml` | MkDocs build and deploy to lab.1int.io |
+
+Version pins in `deploy/environment/versions.env` are bumped by Renovate (`renovate.json`),
+through the `# renovate:` comment above each variable.
 
 ## Architecture
 

@@ -1,0 +1,81 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    "helpers:pinGitHubActionDigests"
+  ],
+  "timezone": "Europe/Madrid",
+  "schedule": [
+    "before 6am on monday"
+  ],
+  "prConcurrentLimit": 3,
+  "labels": [
+    "dependencies"
+  ],
+  "description": [
+    "Version pins live in deploy/environment/versions.env and reach the helmfile through requiredEnv, so Renovate's built-in helmfile manager cannot see them - it reads chart versions written literally in the helmfile. The customManagers block reads the '# renovate:' comment above each variable instead.",
+    "Validate changes with: npx --yes --package renovate -- renovate-config-validator (run from the repo root, or it is treated as global config)."
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Chart and image pins in deploy/environment/versions.env. The optional prefix before the last colon lets a variable hold a full image reference (registry/name:tag) as well as a bare version.",
+      "managerFilePatterns": [
+        "/^deploy/environment/versions\\.env$/"
+      ],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)(?: registryUrl=(?<registryUrl>\\S+))?\\s+[A-Z0-9_]+=(?:\\S+:)?(?<currentValue>\\S+)"
+      ]
+    }
+  ],
+  "packageRules": [
+    {
+      "description": "One PR a week for the infrastructure pins rather than one each. They are validated together by scripts/validate-helm.sh and proven together by a rebuild.",
+      "matchFileNames": [
+        "deploy/environment/versions.env"
+      ],
+      "groupName": "lab dependencies"
+    },
+    {
+      "description": "The Debezium Platform chart moves fast and changes behaviour between pre-releases. It gets its own PR, never grouped, and is merged only after a deployment has been tried by hand.",
+      "matchDepNames": [
+        "debezium-platform"
+      ],
+      "groupName": null,
+      "addLabels": [
+        "test-on-a-cluster"
+      ]
+    },
+    {
+      "description": "A PostgreSQL major version is a data migration for an existing CloudNativePG cluster, not a tag change. Minor and patch bumps only.",
+      "matchDepNames": [
+        "ghcr.io/cloudnative-pg/postgresql"
+      ],
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "enabled": false
+    },
+    {
+      "description": "The OTel operator CHART version and the collector IMAGE tag pinned in deploy/values/dmp/ocp.yaml.gotmpl are separate number lines. Renovate only sees the chart, so flag the PR as needing a look at the collector image.",
+      "matchDepNames": [
+        "opentelemetry-operator"
+      ],
+      "addLabels": [
+        "check-collector-image-tag"
+      ]
+    },
+    {
+      "description": "GitHub Actions in one PR, pinned to commit digests by the helpers:pinGitHubActionDigests preset above.",
+      "matchManagers": [
+        "github-actions"
+      ],
+      "groupName": "github actions"
+    }
+  ],
+  "ignorePaths": [
+    "deploy/charts/**",
+    "deploy/images/**",
+    "site/**"
+  ]
+}

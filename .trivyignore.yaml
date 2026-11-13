@@ -1,0 +1,40 @@
+# Findings accepted by scripts/security-scan.sh, each with the reason it is accepted.
+#
+# This is not a list of false positives. Every entry is a real gap in a chart this
+# repository owns, written down so that the scan can still fail on anything NEW.
+# Removing an entry is how the gap gets closed: fix the chart, delete the lines, and
+# the scan proves it.
+#
+# Paths are relative to the scan root, which is <render>/<chart>/..., where <render>
+# is one of local, sso, ocp (see the script).
+misconfigurations:
+  - id: KSV-0014
+    paths:
+      - "*/apicurio-registry/**"
+      - "*/http-server/**"
+      - "*/kafka-connect/**"
+      - "*/mssql/**"
+    statement: >-
+      Root filesystem is writable. These four demo workloads run their images as
+      published. A read-only root filesystem has to be tried per image on a cluster
+      (SQL Server and Kafka Connect write to theirs), so it is not switched on blind.
+      Lab workloads holding generated sample data only.
+
+  - id: KSV-0118
+    paths:
+      - "*/apicurio-registry/**"
+      - "*/http-server/**"
+      - "*/kafka-connect/**"
+      - "*/mssql/**"
+    statement: >-
+      No security context is set, so the pod runs as whatever user the image names.
+      Same four demo workloads and the same reason as KSV-0014: a security context
+      changes how each image runs and has to be tested on a cluster first.
+
+  - id: KSV-0109
+    paths:
+      - "*/mssql/templates/init-scripts-configmap.yaml"
+    statement: >-
+      The SQL Server init script creates the demo logins with fixed passwords, in a
+      ConfigMap. Deliberate: every demo credential in this repository is fixed and
+      committed, and the database holds generated sample data only.

@@ -1,0 +1,20 @@
+# gitleaks configuration for the PR secret gate (.github/workflows/secrets.yaml).
+#
+# The gate scans only the commits a PR adds. To scan the full history instead:
+#
+#   docker run --rm --user "$(id -u):$(id -g)" \
+#     -e GIT_CONFIG_COUNT=1 -e GIT_CONFIG_KEY_0=safe.directory -e GIT_CONFIG_VALUE_0=/repo \
+#     -v "$PWD:/repo" -w /repo zricethezav/gitleaks:v8.30.1 git --redact -v
+#
+# That scan was clean when this file was added (2026-11-13), so there is no allowlist.
+
+[extend]
+# Start from the upstream rules (AWS, GitHub, Slack, Stripe, private keys, ...) rather
+# than hand-rolling patterns.
+useDefault = true
+
+# This repository commits fixed, boring, non-secret demo credentials on purpose
+# (app_owner/app_owner and the like). They are low entropy and trip no rule, so they
+# need no exception. If a generated lab value ever does fire, add a scoped
+# [[allowlists]] entry here: one rule, one path, and the reason it is worthless
+# outside a lab cluster. Do not allowlist a whole directory.
