@@ -1,0 +1,19 @@
+# CDC dashboard — the same on every profile, so one file rather than one per DPL_ENV.
+#
+# `serve` is the long-running HTMX dashboard over the demo `ecommerce` database,
+# rendered as a Deployment + Service. The same chart installs doctor/provision/load
+# as one-shot Jobs under other release names; only the dashboard lives here.
+mode: serve
+
+# Postgres only: the demo CNPG cluster in `databases`, as `app_owner`, the initdb
+# owner of `ecommerce` (see charts/postgresql-cluster). Fixed lab credentials like
+# the rest of the tree. The chart enables a backend only when its URI is set, so
+# mongodb and mssql stay off.
+postgres:
+  uri: postgres://app_owner:app_owner@postgresql-rw.databases.svc.cluster.local:5432/ecommerce?sslmode=disable
+  schema: public
+
+# ClusterIP, no Ingress. Reach it with
+#   kubectl -n tools port-forward svc/cdc-dashboard 8480:8480
+service:
+  type: ClusterIP

@@ -29,6 +29,9 @@
 {{- if and $dns01Gandi (not $public) }}
   {{- fail "components.dns01-gandi requires DPL_ENV=public — the webhook and ClusterIssuer are useless without the cert-manager the public profile installs" }}
 {{- end }}
+{{- if and $cdcDashboard (not $postgres) }}
+  {{- fail "components.cdc-dashboard requires components.postgres — the dashboard reads the demo ecommerce database that component creates" }}
+{{- end }}
 
 helmDefaults:
   wait: true
@@ -296,6 +299,25 @@ releases:
       infra: "true"
     values:
       - values/http-server/{{ $env }}.yaml
+
+  # The CDC dashboard over the demo `ecommerce` database. Published OCI chart from
+  # pxcamus/oneint-dbz-cdc-app, pulled by reference — no repositories: entry needed.
+  # The chart takes its image tag from its own appVersion, so DPL_CDC_VERSION is the
+  # only number to bump and nothing here names an image.
+  - name: cdc-dashboard
+    namespace: tools
+    createNamespace: true
+    chart: oci://ghcr.io/pxcamus/charts/cdc
+    version: '{{ requiredEnv "DPL_CDC_VERSION" }}'
+    installed: {{ $cdcDashboard }}
+    labels:
+      app: cdc-dashboard
+      component: workload
+    values:
+      - values/cdc-dashboard/values.yaml
+    # Connects as app_owner to the ecommerce database the CNPG cluster bootstraps.
+    needs:
+      - databases/postgresql-cluster
 
   - name: apicurio-registry
     namespace: apicurio
